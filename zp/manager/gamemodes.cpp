@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -90,7 +90,7 @@ void GameModesOnInit(/*void*/)
     HookEvent("cs_win_panel_round", GameModesOnPanel,     EventHookMode_Pre);
     
     // Creates a HUD synchronization object
-    gServerData.Game = CreateHudSynchronizer();
+    gServerData.GameSync = CreateHudSynchronizer();
 }
 
 /**
@@ -135,14 +135,6 @@ void GameModesOnLoad(/*void*/)
         return;
     }
 
-    // Validate gamemodes config
-    int iSize = gServerData.GameModes.Length;
-    if(!iSize)
-    {
-        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_GameModes, "Config Validation", "No usable data found in gamemodes config file: \"%s\"", sPathModes);
-        return;
-    }
-
     // Now copy data to array structure
     GameModesOnCacheData();
 
@@ -176,8 +168,15 @@ void GameModesOnCacheData(/*void*/)
         return;
     }
 
-    // i = array index
+    // Validate size
     int iSize = gServerData.GameModes.Length;
+    if(!iSize)
+    {
+        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_GameModes, "Config Validation", "No usable data found in gamemodes config file: \"%s\"", sPathModes);
+        return;
+    }
+    
+    // i = array index
     for(int i = 0; i < iSize; i++)
     {
         // General
@@ -241,10 +240,28 @@ void GameModesOnCacheData(/*void*/)
         arrayGameMode.PushString(sPathModes);                                       // Index: 21
         kvGameModes.GetString("overlay_human", sPathModes, sizeof(sPathModes), "");
         arrayGameMode.PushString(sPathModes);                                       // Index: 22
+        if(hasLength(sPathModes)) 
+        {
+            // Precache material
+            Format(sPathModes, sizeof(sPathModes), "materials/%s", sPathModes);
+            DecryptPrecacheTextures(sPathModes);
+        }
         kvGameModes.GetString("overlay_zombie", sPathModes, sizeof(sPathModes), "");
         arrayGameMode.PushString(sPathModes);                                       // Index: 23
+        if(hasLength(sPathModes)) 
+        {
+            // Precache material
+            Format(sPathModes, sizeof(sPathModes), "materials/%s", sPathModes);
+            DecryptPrecacheTextures(sPathModes);
+        }
         kvGameModes.GetString("overlay_draw", sPathModes, sizeof(sPathModes), "");
         arrayGameMode.PushString(sPathModes);                                       // Index: 24
+        if(hasLength(sPathModes)) 
+        {
+            // Precache material
+            Format(sPathModes, sizeof(sPathModes), "materials/%s", sPathModes);
+            DecryptPrecacheTextures(sPathModes);
+        }
         arrayGameMode.Push(kvGameModes.GetNum("deathmatch", 0));                    // Index: 25
         arrayGameMode.Push(kvGameModes.GetNum("amount", 0));                        // Index: 26
         arrayGameMode.Push(kvGameModes.GetFloat("delay", 0.0));                     // Index: 27
@@ -473,7 +490,7 @@ public Action GameModesOnCounter(Handle hTimer)
             if(gServerData.RoundCount == (gCvarList[CVAR_GAMEMODE].IntValue - 2))
             {
                 // If help messages enabled, then show info
-                if(gCvarList[CVAR_MESSAGES_HELP].BoolValue)
+                if(gCvarList[CVAR_MESSAGES_OBJECTIVE].BoolValue)
                 {
                     // Show help information
                     TranslationPrintToChatAll("general round objective");
@@ -489,7 +506,7 @@ public Action GameModesOnCounter(Handle hTimer)
             if(SoundsOnCounter()) /// (2)
             {
                 // If help messages enabled, then show info
-                if(gCvarList[CVAR_MESSAGES_HELP].BoolValue)
+                if(gCvarList[CVAR_MESSAGES_COUNTER].BoolValue)
                 {
                     // Show help information
                     TranslationPrintHintTextAll("zombie comming", gServerData.RoundCount);
@@ -512,7 +529,7 @@ public Action GameModesOnCounter(Handle hTimer)
         gServerData.RoundCount--;
     }
 
-    // Allow counter
+    // Allow timer
     return Plugin_Continue;
 }
 
@@ -522,7 +539,7 @@ public Action GameModesOnCounter(Handle hTimer)
  * @param modeIndex         (Optional) The mode index. 
  * @param targetIndex       (Optional) The target index.
  **/
-void GameModesOnBegin(int modeIndex = -1, int targetIndex = -1)
+void GameModesOnBegin(int modeIndex = -1, int targetIndex = INVALID_ENT_REFERENCE)
 {
     // Resets server grobal variables
     gServerData.RoundNew   = false;
@@ -575,12 +592,12 @@ void GameModesOnBegin(int modeIndex = -1, int targetIndex = -1)
         if(flTime)
         {
             // Print game mode description
-            TranslationPrintHudTextAll(gServerData.Game, ModesGetDescPosX(gServerData.RoundMode), ModesGetDescPosY(gServerData.RoundMode), flTime, iColor[0], iColor[1], iColor[2], iColor[3], 0, 0.0, 0.0, 0.0, sBuffer);
+            TranslationPrintHudTextAll(gServerData.GameSync, ModesGetDescPosX(gServerData.RoundMode), ModesGetDescPosY(gServerData.RoundMode), flTime, iColor[0], iColor[1], iColor[2], iColor[3], 0, 0.0, 0.0, 0.0, sBuffer);
         }
     }
     
     // Gets shuffled client array
-    clientIndex = fnGetRandomAlive(targetIndex, (ModesGetRatio(gServerData.RoundMode) < 0.5)); /// If less than half, selected will be zombie
+    fnGetRandomAlive(clientIndex, targetIndex, (ModesGetRatio(gServerData.RoundMode) < 0.5)); /// If less than half, selected will be zombie
     
     /*_________________________________________________________________________________________________________________________________________*/
     
@@ -592,7 +609,7 @@ void GameModesOnBegin(int modeIndex = -1, int targetIndex = -1)
     {
         // Make zombies
         ApplyOnClientUpdate(clientIndex[i], _, sBuffer);
-        ToolsSetClientHealth(clientIndex[i], GetClientHealth(clientIndex[i]) + (iAlive * ModesGetHealth(gServerData.RoundMode))); /// Add health
+        ToolsSetHealth(clientIndex[i], ToolsGetHealth(clientIndex[i]) + (iAlive * ModesGetHealth(gServerData.RoundMode))); /// Add health
     }
     
     /*_________________________________________________________________________________________________________________________________________*/
@@ -600,8 +617,8 @@ void GameModesOnBegin(int modeIndex = -1, int targetIndex = -1)
     // Gets human class type
     ModesGetHumanClass(gServerData.RoundMode, sBuffer, sizeof(sBuffer));
 
-    // Make standart humans
-    if(!strcmp(sBuffer, "human"))
+    // Make standard humans
+    if(!strcmp(sBuffer, "human", false))
     {
         // i = client index    
         for(int i = iMaxZombies; i < iAlive; i++) /// Remaining players should be humans
@@ -750,22 +767,6 @@ public Action GameModesOnBlast(Handle hTimer)
  **/
 public Action CS_OnTerminateRound(float& flDelay, CSRoundEndReason& reasonIndex)
 {
-    // Validate time
-    int iRoundTimeLeft = (RoundToNearest(GameRules_GetPropFloat("m_fRoundStartTime")) + GameRules_GetProp("m_iRoundTime")) - RoundToNearest(GetGameTime());
-    if(iRoundTimeLeft > 0)
-    {
-        // i = client index
-        for(int i = 1; i <= MaxClients; i++)
-        {
-            // Validate any respawning
-            if(gClientData[i].RespawnTimer != null)
-            {
-                // Block end
-                return Plugin_Handled;
-            }
-        }
-    }
-    
     // Resets server grobal variables
     gServerData.RoundNew   = false;
     gServerData.RoundEnd   = true;
@@ -810,7 +811,7 @@ public Action CS_OnTerminateRound(float& flDelay, CSRoundEndReason& reasonIndex)
         // Sets bonus overlay 
         ModesReward(BonusType_Win, BonusType_Lose, Overlay_ZombieWin);
 
-        // Sets the reason
+// Sets the reason
         reasonIndex = CSRoundEnd_TerroristWin;
     }
     // We know here, that either zombies or humans is 0 (not both)
@@ -958,7 +959,7 @@ public int API_StartGameMode(Handle hPlugin, int iNumParams)
     int targetIndex = GetNativeCell(2);
 
     // Validate client
-    if(targetIndex != -1 && !IsPlayerExist(targetIndex))
+    if(targetIndex != INVALID_ENT_REFERENCE && !IsPlayerExist(targetIndex))
     {
         LogEvent(false, LogType_Native, LOG_GAME_EVENTS, LogModule_GameModes, "Native Validation", "Invalid the target index (%d)", targetIndex);
         return -1;
@@ -3136,13 +3137,13 @@ void ModesBalanceTeams(/*void*/)
         if(IsPlayerExist(i, false))
         {
             // Validate team
-            if(GetClientTeam(i) <= TEAM_SPECTATOR)
+            if(ToolsGetTeam(i) <= TEAM_SPECTATOR)
             {
                 continue;
             }
     
             // Swith team
-            ApplyOnClientTeam(i, !(i % 2) ? TEAM_HUMAN : TEAM_ZOMBIE);
+            ApplyOnClientTeam(i, (i & 1) ? TEAM_ZOMBIE : TEAM_HUMAN);
         }
     }
 }
@@ -3154,8 +3155,7 @@ void ModesKillEntities(/*void*/)
 {
     // Initialize variables
     static char sClassname[NORMAL_LINE_LENGTH];
-    static char sObjective[NORMAL_LINE_LENGTH+1] = "func_bomb_target_hostage_entity_func_hostage_rescue_func_buyzone";
-
+    
     // i = entity index
     int MaxEntities = GetMaxEntities();
     for(int i = MaxClients; i <= MaxEntities; i++)
@@ -3165,9 +3165,12 @@ void ModesKillEntities(/*void*/)
         {
             // Gets valid edict classname
             GetEdictClassname(i, sClassname, sizeof(sClassname));
-            
+
             // Validate objectives
-            if(StrContains(sObjective, sClassname, false) != -1) 
+            if((sClassname[0] == 'h' && sClassname[7] == '_' && sClassname[8] == 'e') || // hostage_entity
+               (sClassname[0] == 'f' && // func_
+               (sClassname[5] == 'h' || // _hostage_rescue
+               (sClassname[5] == 'b' && (sClassname[7] == 'y' || sClassname[7] == 'm'))))) // _buyzone , _bomb_target
             {
                 AcceptEntityInput(i, "Kill"); /// Destroy
             }
@@ -3190,11 +3193,11 @@ void ModesKillEntities(/*void*/)
 /**
  * @brief Gives rewards by the bonus type and shows overlay.
  * 
- * @param zombieType        The bonus type.
- * @param humanType         The bonus type.
- * @param overlayType       The overlay type.
+ * @param rZombie           The zombie bonus type.
+ * @param rHuman            The human bonus type.
+ * @param nOverlay          The overlay type.
  **/
-void ModesReward(int zombieType, int humanType, OverlayType overlayType)
+void ModesReward(int rZombie, int rHuman, OverlayType nOverlay)
 {
     // i = client index
     for(int i = 1; i <= MaxClients; i++)
@@ -3203,7 +3206,7 @@ void ModesReward(int zombieType, int humanType, OverlayType overlayType)
         if(IsPlayerExist(i, false))
         {
             // Validate team
-            if(GetClientTeam(i) <= TEAM_SPECTATOR)
+            if(ToolsGetTeam(i) <= TEAM_SPECTATOR)
             {
                 continue;
             }
@@ -3214,11 +3217,11 @@ void ModesReward(int zombieType, int humanType, OverlayType overlayType)
             ClassGetMoney(gClientData[i].Class, iMoney, sizeof(iMoney));
             
             // Increment money/exp
-            LevelSystemOnSetExp(i, gClientData[i].Exp + (gClientData[i].Zombie ? iExp[zombieType] : iExp[humanType]));
-            AccountSetClientCash(i, gClientData[i].Money + (gClientData[i].Zombie ? iMoney[zombieType] : iMoney[humanType]));
+            LevelSystemOnSetExp(i, gClientData[i].Exp + (gClientData[i].Zombie ? iExp[rZombie] : iExp[rHuman]));
+            AccountSetClientCash(i, gClientData[i].Money + (gClientData[i].Zombie ? iMoney[rZombie] : iMoney[rHuman]));
 
             // Display overlay to the client
-            VOverlayOnClientUpdate(i, overlayType);
+            VOverlayOnClientUpdate(i, nOverlay);
         }
     }
 }
@@ -3244,7 +3247,7 @@ void ModesBlast(float flDelay)
         SoundsOnBlast();
         
         // If help messages enabled, then show info
-        if(gCvarList[CVAR_MESSAGES_HELP].BoolValue)
+        if(gCvarList[CVAR_MESSAGES_BLAST].BoolValue)
         {
             // Show help information
             TranslationPrintHintTextAll("general blast reminder");
@@ -3265,7 +3268,7 @@ void ModesBlast(float flDelay)
  * @param clientIndex       The client index.
  * @param targetIndex       (Optional) The selected index.
  **/
-void ModesMenu(int clientIndex, int targetIndex = -1)
+void ModesMenu(int clientIndex, int targetIndex = INVALID_ENT_REFERENCE)
 {
     // Validate client
     if(!IsPlayerExist(clientIndex, false))
@@ -3304,7 +3307,7 @@ void ModesMenu(int clientIndex, int targetIndex = -1)
     hMenu.SetTitle("%t", "modes menu");
 
     // If there are no target, add an "(Empty)" line
-    if(targetIndex != -1)
+    if(targetIndex != INVALID_ENT_REFERENCE)
     {
         // Format some chars for showing in menu
         FormatEx(sBuffer, sizeof(sBuffer), "%N\n \n", targetIndex);
@@ -3319,7 +3322,7 @@ void ModesMenu(int clientIndex, int targetIndex = -1)
     hMenu.AddItem("-1", sBuffer);
     
     // Initialize forward
-    static Action resultHandle;
+    Action resultHandle;
     
     // i = array index
     int iSize = gServerData.GameModes.Length;
@@ -3413,13 +3416,11 @@ public int ModesMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int m
                 return;
             }
             
-            // Initialize name char
-            static char sModeName[SMALL_LINE_LENGTH];
-        
             // Gets menu info
-            hMenu.GetItem(mSlot, sModeName, sizeof(sModeName));
+            static char sBuffer[SMALL_LINE_LENGTH];
+            hMenu.GetItem(mSlot, sBuffer, sizeof(sBuffer));
             static char sInfo[2][SMALL_LINE_LENGTH];
-            ExplodeString(sModeName, " ", sInfo, sizeof(sInfo), sizeof(sInfo[]));
+            ExplodeString(sBuffer, " ", sInfo, sizeof(sInfo), sizeof(sInfo[]));
             int iD = StringToInt(sInfo[0]); int targetIndex = StringToInt(sInfo[1]);
             
             // Validalite list option
@@ -3431,14 +3432,14 @@ public int ModesMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int m
             }
 
             // Call forward
-            static Action resultHandle;
+            Action resultHandle;
             gForwardData._OnClientValidateMode(clientIndex, iD, resultHandle);
             
             // Validate handle
             if(resultHandle == Plugin_Continue || resultHandle == Plugin_Changed)
             {
                 // Validate target
-                if(targetIndex != -1 && !IsPlayerExist(targetIndex))
+                if(targetIndex != INVALID_ENT_REFERENCE && !IsPlayerExist(targetIndex))
                 {
                     // Opens mode menu back
                     ModesMenu(clientIndex);
@@ -3455,10 +3456,10 @@ public int ModesMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int m
                 GameModesOnBegin(iD, targetIndex);
                 
                 // Gets mode name
-                ModesGetName(iD, sModeName, sizeof(sModeName));
+                ModesGetName(iD, sBuffer, sizeof(sBuffer));
                 
                 // Log action to game events
-                LogEvent(true, LogType_Normal, LOG_PLAYER_COMMANDS, LogModule_GameModes, "Command", "Admin \"%N\" started a gamemode: \"%s\"", clientIndex, sModeName);
+                LogEvent(true, LogType_Normal, LOG_PLAYER_COMMANDS, LogModule_GameModes, "Command", "Admin \"%N\" started a gamemode: \"%s\"", clientIndex, sBuffer);
             }
         }
     }
@@ -3509,7 +3510,7 @@ void ModesOptionMenu(int clientIndex)
     if(!iCount)
     {
         // Format some chars for showing in menu
-        Format(sBuffer, sizeof(sBuffer), "%t", "empty");
+        FormatEx(sBuffer, sizeof(sBuffer), "%t", "empty");
         hMenu.AddItem("empty", sBuffer, ITEMDRAW_DISABLED);
     }
     
@@ -3559,12 +3560,10 @@ public int ModesListMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, i
                 return;
             }
             
-            // Initialize key char
-            static char sKey[SMALL_LINE_LENGTH];
-
             // Gets menu info
-            hMenu.GetItem(mSlot, sKey, sizeof(sKey));
-            int iD = StringToInt(sKey);
+            static char sBuffer[SMALL_LINE_LENGTH];
+            hMenu.GetItem(mSlot, sBuffer, sizeof(sBuffer));
+            int iD = StringToInt(sBuffer);
 
             // Opens modes menu back with selected index
             ModesMenu(clientIndex, iD);

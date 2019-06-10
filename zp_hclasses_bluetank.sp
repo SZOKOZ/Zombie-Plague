@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -81,7 +81,7 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
     {
         // Validate amount
         int iHealth = ZP_GetClassHealth(gHuman);
-        if(GetClientHealth(clientIndex) >= iHealth)
+        if(GetEntProp(clientIndex, Prop_Send, "m_iHealth") >= iHealth)
         {
             return Plugin_Handled;
         }
@@ -89,15 +89,13 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
         // Sets health
         SetEntProp(clientIndex, Prop_Send, "m_iHealth", iHealth, 1);
 
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound), 1);
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 1, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
         
         // Create effect
         static float vPosition[3];
-        GetClientAbsOrigin(clientIndex, vPosition);
-        ZP_CreateParticle(clientIndex, vPosition, _, "vixr_final", ZP_GetClassSkillDuration(gHuman));
+        GetEntPropVector(clientIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
+        UTIL_CreateParticle(clientIndex, vPosition, _, _, "vixr_final", ZP_GetClassSkillDuration(gHuman));
     }
     
     // Allow usage

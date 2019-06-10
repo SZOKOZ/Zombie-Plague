@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -82,34 +82,34 @@ public void ZP_OnEngineExecute(/*void*/)
  * @brief Called before show an extraitem in the equipment menu.
  * 
  * @param clientIndex       The client index.
- * @param extraitemIndex    The item index.
+ * @param itemID            The item index.
  *
  * @return                  Plugin_Handled to disactivate showing and Plugin_Stop to disabled showing. Anything else
  *                              (like Plugin_Continue) to allow showing and calling the ZP_OnClientBuyExtraItem() forward.
  **/
-public Action ZP_OnClientValidateExtraItem(int clientIndex, int extraitemIndex)
+public Action ZP_OnClientValidateExtraItem(int clientIndex, int itemID)
 {
     // Check the item's index
-    if(extraitemIndex == gItemKevlar)
+    if(itemID == gItemKevlar)
     {
         // Validate access
-        if(GetClientArmor(clientIndex) >= ZP_GetWeaponClip(gWeaponKevlar))
+        if(GetEntProp(clientIndex, Prop_Send, "m_ArmorValue") >= ZP_GetWeaponClip(gWeaponKevlar))
         {
             return Plugin_Handled;
         }
     }
-    else if(extraitemIndex == gItemAssault)
+    else if(itemID == gItemAssault)
     {
         // Validate access
-        if(GetClientArmor(clientIndex) >= ZP_GetWeaponClip(gWeaponAssault) || GetEntProp(clientIndex, Prop_Send, "m_bHasHelmet"))
+        if(GetEntProp(clientIndex, Prop_Send, "m_ArmorValue") >= ZP_GetWeaponClip(gWeaponAssault) || GetEntProp(clientIndex, Prop_Send, "m_bHasHelmet"))
         {
             return Plugin_Handled;
         }
     }
-    else if(extraitemIndex == gItemHeavy)
+    else if(itemID == gItemHeavy)
     {
         // Validate access
-        if(GetClientArmor(clientIndex) >= ZP_GetWeaponClip(gWeaponHeavy) || GetEntProp(clientIndex, Prop_Send, "m_bHasHeavyArmor"))
+        if(GetEntProp(clientIndex, Prop_Send, "m_ArmorValue") >= ZP_GetWeaponClip(gWeaponHeavy) || GetEntProp(clientIndex, Prop_Send, "m_bHasHeavyArmor"))
         {
             return Plugin_Handled;
         }
@@ -123,22 +123,22 @@ public Action ZP_OnClientValidateExtraItem(int clientIndex, int extraitemIndex)
  * @brief Called after select an extraitem in the equipment menu.
  * 
  * @param clientIndex       The client index.
- * @param extraitemIndex    The item index.
+ * @param itemID            The item index.
  **/
-public void ZP_OnClientBuyExtraItem(int clientIndex, int extraitemIndex)
+public void ZP_OnClientBuyExtraItem(int clientIndex, int itemID)
 {
     // Check the item's index
-    if(extraitemIndex == gItemKevlar)
+    if(itemID == gItemKevlar)
     {
         // Give item
         ZP_GiveClientWeapon(clientIndex, gWeaponKevlar);
     }
-    else if(extraitemIndex == gItemAssault)
+    else if(itemID == gItemAssault)
     {
         // Give item
         ZP_GiveClientWeapon(clientIndex, gWeaponAssault);
     }
-    else if(extraitemIndex == gItemHeavy)
+    else if(itemID == gItemHeavy)
     {
         // Give item
         ZP_GiveClientWeapon(clientIndex, gWeaponHeavy);

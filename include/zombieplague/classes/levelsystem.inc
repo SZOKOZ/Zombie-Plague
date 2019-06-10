@@ -11,11 +11,11 @@
  * 
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
  * details.
  *
  * You should have received a copy of the GNU General Public License along with
- * this program.  If not, see <http://www.gnu.org/licenses/>.
+ * this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * As a special exception, AlliedModders LLC gives you permission to link the
  * code of this program (as well as its derivative works) to "Half-Life 2," the
@@ -31,7 +31,7 @@
  #endinput
 #endif
 #define _levelsystem_included
-
+ 
 /**
  * @brief Called when a client receive level.
  * 
@@ -41,6 +41,22 @@
  * @noreturn
  **/
 forward void ZP_OnClientLevel(int clientIndex, int &level);
+
+/**
+ * @brief Gets the maximum level.
+ *
+ * @return                  The max level.     
+ **/
+native int ZP_GetLevelMax();
+
+/**
+ * @brief Gets the level experience limit.
+ *
+ * @param level             The level amount.
+ *
+ * @return                  The limit amount.
+ **/
+native int ZP_GetLevelLimit(int level);
 
 /**
  * @brief Called when a client receive experience.

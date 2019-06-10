@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -41,10 +41,10 @@ public Plugin myinfo =
 }
 
 /**
- * @section Information about zombie class.
+ * @section Information about the zombie class.
  **/
+//#define ZOMBIE_CLASS_EXP_LAST         // Can a last human be infected [uncomment-no // comment-yes]
 #define ZOMBIE_CLASS_EXP_RADIUS         200.0
-#define ZOMBIE_CLASS_EXP_LAST           false   // Can a last human be infected
 #define ZOMBIE_CLASS_EXP_DURATION       2.0
 /**
  * @endsection
@@ -57,20 +57,6 @@ int gSound; ConVar hSoundLevel;
 // Zombie index
 int gZombie;
 #pragma unused gZombie
-
-/**
- * @brief Called after a library is added that the current plugin references optionally. 
- *        A library is either a plugin name or extension name, as exposed via its include file.
- **/
-public void OnLibraryAdded(const char[] sLibrary)
-{
-    // Validate library
-    if(!strcmp(sLibrary, "zombieplague", false))
-    {
-        // Hook events
-        HookEvent("player_death", EventPlayerDeath, EventHookMode_Pre);
-    }
-}
 
 /**
  * @brief Called after a zombie core is loaded.
@@ -91,65 +77,52 @@ public void ZP_OnEngineExecute(/*void*/)
 }
 
 /**
- * Event callback (player_death)
- * @brief Client has been killed.
+ * @brief Called when a client has been killed.
  * 
- * @param gEventHook        The event handle.
- * @param gEventName        The name of the event.
- * @param dontBroadcast     If true, event is broadcasted to all clients, false ifnot.
+ * @param clientIndex       The client index.
+ * @param attackerIndex     The attacker index.
  **/
-public Action EventPlayerDeath(Event hEvent, char[] sName, bool dontBroadcast) 
+public void ZP_OnClientDeath(int clientIndex, int attackerIndex)
 {
-    // Gets all required event info
-    int clientIndex = GetClientOfUserId(hEvent.GetInt("userid"));
-
     // Validate the zombie class index
     if(ZP_GetClientClass(clientIndex) == gZombie)
     {
-        // Initialize vectors
-        static float vEntPosition[3]; static float vVictimPosition[3];
-
         // Gets client origin
-        GetClientAbsOrigin(clientIndex, vEntPosition);
-
+        static float vPosition[3]; 
+        GetEntPropVector(clientIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
+        
         // Validate infection round
         if(ZP_IsGameModeInfect(ZP_GetCurrentGameMode()) && ZP_IsStartedRound())
         {
-            // i = client index
-            for(int i = 1; i <= MaxClients; i++)
+            // Find any players in the radius
+            int i; int it = 1; /// iterator
+            while((i = ZP_FindPlayerInSphere(it, vPosition, ZOMBIE_CLASS_EXP_RADIUS)) != INVALID_ENT_REFERENCE)
             {
-                // Validate human
-                if(IsPlayerExist(i) && ZP_IsPlayerHuman(i))
+                // Skip zombies
+                if(ZP_IsPlayerZombie(i))
                 {
-                    // Gets victim origin
-                    GetClientAbsOrigin(i, vVictimPosition);
-
-                    // Calculate the distance
-                    float flDistance = GetVectorDistance(vEntPosition, vVictimPosition);
-
-                    // Validate distance
-                    if(flDistance <= ZOMBIE_CLASS_EXP_RADIUS)
-                    {
-                        // Change class to zombie
-                        if(ZP_GetHumanAmount() > 1 || ZOMBIE_CLASS_EXP_LAST) ZP_ChangeClient(i, clientIndex, "zombie");
-                    }
+                    continue;
                 }
+
+                // Validate visibility
+                if(!UTIL_CanSeeEachOther(clientIndex, i, vPosition))
+                {
+                    continue;
+                }
+                
+                // Change class to zombie
+                #if defined ZOMBIE_CLASS_EXP_LAST
+                ZP_ChangeClient(i, clientIndex, "zombie");
+                #else
+                if(ZP_GetHumanAmount() > 1) ZP_ChangeClient(i, clientIndex, "zombie");
+                #endif
             }
         }
         
-        // Gets ragdoll index
-        int iRagdoll = GetEntPropEnt(clientIndex, Prop_Send, "m_hRagdoll");
+        // Create an effect
+        UTIL_CreateParticle(_, vPosition, _, _, "explosion_hegrenade_dirt", ZOMBIE_CLASS_EXP_DURATION);
 
-        // If the ragdoll is invalid, then stop
-        if(IsValidEdict(iRagdoll))
-        {
-            // Create an effect
-            ZP_CreateParticle(iRagdoll, vEntPosition, _, "explosion_hegrenade_dirt", ZOMBIE_CLASS_EXP_DURATION);
-            
-            // Emit sound
-            static char sSound[PLATFORM_LINE_LENGTH];
-            ZP_GetSound(gSound, sSound, sizeof(sSound));
-            EmitSoundToAll(sSound, iRagdoll, SNDCHAN_STATIC, hSoundLevel.IntValue);
-        }
+        // Play sound
+        ZP_EmitAmbientSound(gSound, 1, vPosition, SOUND_FROM_WORLD, hSoundLevel.IntValue); 
     }
 }

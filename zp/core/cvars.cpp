@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -81,6 +81,8 @@ enum CvarsList
     ConVar:CVAR_WEAPON_T_DEFAULT_MELEE,
     ConVar:CVAR_WEAPON_T_DEFAULT_SECONDARY,
     ConVar:CVAR_WEAPON_T_DEFAULT_PRIMARY,
+    ConVar:CVAR_WEAPON_PICKUP_RANGE,
+    ConVar:CVAR_WEAPON_DEFAULT_MELEE,
 
     ConVar:CVAR_LOG,
     ConVar:CVAR_LOG_MODULE_FILTER,
@@ -91,10 +93,8 @@ enum CvarsList
     ConVar:CVAR_JUMPBOOST,
     ConVar:CVAR_JUMPBOOST_MULTIPLIER,
     ConVar:CVAR_JUMPBOOST_MAX,
-    ConVar:CVAR_JUMPBOOST_KNOCKBACK,
     
     ConVar:CVAR_LEVEL_SYSTEM,
-    ConVar:CVAR_LEVEL_STATISTICS,
     ConVar:CVAR_LEVEL_HEALTH_RATIO,
     ConVar:CVAR_LEVEL_SPEED_RATIO,
     ConVar:CVAR_LEVEL_GRAVITY_RATIO,
@@ -117,6 +117,7 @@ enum CvarsList
     
     ConVar:CVAR_ACCOUNT_CASH_AWARD,
     ConVar:CVAR_ACCOUNT_BUY_ANYWHERE,
+    ConVar:CVAR_ACCOUNT_BUY_IMMUNITY,
     ConVar:CVAR_ACCOUNT_MONEY,
     ConVar:CVAR_ACCOUNT_CONNECT,
     ConVar:CVAR_ACCOUNT_BET,
@@ -136,7 +137,14 @@ enum CvarsList
     ConVar:CVAR_VEFFECTS_FADE,
     ConVar:CVAR_VEFFECTS_FADE_TIME,
     ConVar:CVAR_VEFFECTS_FADE_DURATION,
-    ConVar:CVAR_VEFFECTS_PARTICLES,
+    ConVar:CVAR_VEFFECTS_IMMUNITY_ALPHA,
+    ConVar:CVAR_VEFFECTS_HEALTH,
+    ConVar:CVAR_VEFFECTS_HEALTH_SPRITE,
+    ConVar:CVAR_VEFFECTS_HEALTH_SCALE,
+    ConVar:CVAR_VEFFECTS_HEALTH_VAR,
+    ConVar:CVAR_VEFFECTS_HEALTH_FRAMES,
+    ConVar:CVAR_VEFFECTS_HEALTH_DURATION,
+    ConVar:CVAR_VEFFECTS_HEALTH_HEIGHT,
     ConVar:CVAR_VEFFECTS_INFECT,
     ConVar:CVAR_VEFFECTS_HUMANIZE,
     ConVar:CVAR_VEFFECTS_RESPAWN,
@@ -154,7 +162,7 @@ enum CvarsList
     ConVar:CVAR_VEFFECTS_LIGHTSTYLE,
     ConVar:CVAR_VEFFECTS_LIGHTSTYLE_VALUE,
     ConVar:CVAR_VEFFECTS_SKY,
-    ConVar:CVAR_VEFFECTS_SKYNAME, ///
+    ConVar:CVAR_VEFFECTS_SKYNAME,
     ConVar:CVAR_VEFFECTS_SKY_PATH, 
     ConVar:CVAR_VEFFECTS_SUN_DISABLE,
     ConVar:CVAR_VEFFECTS_FOG,
@@ -166,9 +174,9 @@ enum CvarsList
     ConVar:CVAR_VEFFECTS_RAGDOLL_REMOVE,
     ConVar:CVAR_VEFFECTS_RAGDOLL_DISSOLVE,
     ConVar:CVAR_VEFFECTS_RAGDOLL_DELAY,
-    
+
     ConVar:CVAR_SEFFECTS_LEVEL,
-    ConVar:CVAR_SEFFECTS_ALLTALK, ////
+    ConVar:CVAR_SEFFECTS_ALLTALK,
     ConVar:CVAR_SEFFECTS_VOICE,
     ConVar:CVAR_SEFFECTS_VOICE_ZOMBIES_MUTE,
     ConVar:CVAR_SEFFECTS_INFECT,
@@ -186,11 +194,23 @@ enum CvarsList
     ConVar:CVAR_SEFFECTS_ROUND_COUNT,  
     ConVar:CVAR_SEFFECTS_ROUND_BLAST,
     
-    ConVar:CVAR_INFECT_ICON,
-    ConVar:CVAR_HEAD_ICON,
+    ConVar:CVAR_ICON_INFECT,
+    ConVar:CVAR_ICON_HEAD,
+
+    ConVar:CVAR_MESSAGES_OBJECTIVE,
+    ConVar:CVAR_MESSAGES_COUNTER,
+    ConVar:CVAR_MESSAGES_BLAST,
+    ConVar:CVAR_MESSAGES_DAMAGE,
+    ConVar:CVAR_MESSAGES_DONATE,
+    ConVar:CVAR_MESSAGES_CLASS_INFO,
+    ConVar:CVAR_MESSAGES_CLASS_CHOOSE,
+    ConVar:CVAR_MESSAGES_ITEM_INFO,
+    ConVar:CVAR_MESSAGES_ITEM_ALL,
+    ConVar:CVAR_MESSAGES_WEAPON_INFO,
+    ConVar:CVAR_MESSAGES_WEAPON_ALL,
+    ConVar:CVAR_MESSAGES_BLOCK,
     
-    ConVar:CVAR_MESSAGES_HELP,
-    ConVar:CVAR_MESSAGES_BLOCK
+    ConVar:CVAR_SEND_TABLES
 };
 /**
  * @endsection
@@ -209,7 +229,7 @@ void CvarsOnInit(/*void*/)
     // Prepare all cvar data
     CvarsOnLoad();
     
-    // Forward event to sub-modules
+    // Forward event to modules
     DataBaseOnCvarInit();
     LogOnCvarInit();
     VEffectsOnCvarInit();
@@ -266,9 +286,6 @@ void CvarsOnLoad(/*void*/)
     ConfigSetConfigLoaded(File_Cvars, true);
     ConfigSetConfigReloadFunc(File_Cvars, GetFunctionByName(GetMyHandle(), "CvarsOnConfigReload"));
     ConfigSetConfigHandle(File_Cvars, gServerData.Cvars);
-    
-    // Destroy all data
-    ConfigClearKvArray(gServerData.Cvars);
 }
 
 /**
@@ -320,6 +337,9 @@ void CvarsOnCacheData(/*void*/)
             i--;
         }
     }
+    
+    // Destroy all data
+    ConfigClearKvArray(gServerData.Cvars);
 }
 
 /**

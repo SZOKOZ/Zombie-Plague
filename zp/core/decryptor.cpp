@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -146,11 +146,11 @@ int DecryptPrecacheParticle(char[] sModel)
     }
 
     // If model doesn't precache yet, then continue
-    if(!IsGenericPrecached(sModel))
-    {
-        // Precache model effects
-        DecryptPrecacheEffects(sModel);
-    }
+    /**if(!IsGenericPrecached(sModel))**/
+    // Thanks Valve!
+    
+    // Precache model effects
+    DecryptPrecacheEffects(sModel);
     
     // Return the model index
     return PrecacheGeneric(sModel, true);
@@ -771,7 +771,7 @@ bool DecryptPrecacheTextures(char[] sPath)
                     
                     // Format full path to file
                     Format(sTexture, sizeof(sTexture), "materials\\%s.vtf", sTexture);
-                    
+
                     // Validate material
                     if(FileExists(sTexture))
                     {
@@ -780,8 +780,12 @@ bool DecryptPrecacheTextures(char[] sPath)
                     }
                     else
                     {
-                        LogEvent(false, LogType_Error, LOG_CORE_EVENTS, LogModule_Decrypt, "Config Validation", "Invalid texture path. File not found: \"%s\"", sTexture);
-                    }
+                        // Validate non default textures
+                        if(!FileExists(sTexture, true))
+                        {
+                            LogEvent(false, LogType_Error, LOG_CORE_EVENTS, LogModule_Decrypt, "Config Validation", "Invalid texture path. File not found: \"%s\"", sTexture);
+                        }
+                   }
                 }
             }
         }

@@ -20,32 +20,11 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
 
-/**
- * @section Weapon addon bits.
- **/
-#define CSAddon_NONE                0
-#define CSAddon_Flashbang1          (1<<0)
-#define CSAddon_Flashbang2          (1<<1)
-#define CSAddon_HEGrenade           (1<<2)
-#define CSAddon_SmokeGrenade        (1<<3)
-#define CSAddon_C4                  (1<<4)
-#define CSAddon_DefuseKit           (1<<5)
-#define CSAddon_PrimaryWeapon       (1<<6)
-#define CSAddon_SecondaryWeapon     (1<<7)
-#define CSAddon_Holster             (1<<8) 
-#define CSAddon_Decoy               (1<<9)
-#define CSAddon_Knife               (1<<10)
-#define CSAddon_FaceMask            (1<<11) // I'am guess
-#define CSAddon_TaGrenade           (1<<12)
-/**
- * @endsection
- **/
- 
 /**
  * @section Number of valid addons.
  **/
@@ -86,54 +65,6 @@ void WeaponAttachOnUnload(/*void*/)
     }
 }
 
-/**
- * Hook: SetTransmit
- * @brief Called right before the entity transmitting to other entities.
- *
- * @param entityIndex       The entity index.
- * @param clientIndex       The client index.
- **/
-public Action WeaponAttachOnTransmit(int entityIndex, int clientIndex)
-{
-    // i = slot index
-    for(BitType i = BitType_PrimaryWeapon; i <= BitType_DefuseKit; i++)
-    {
-        // Validate addons
-        if(EntRefToEntIndex(gClientData[clientIndex].AttachmentAddons[i]) == entityIndex)
-        {
-            // Validate observer mode
-            if(ToolsGetClientObserverMode(clientIndex))
-            {
-                // Allow transmitting    
-                return Plugin_Continue;
-            }
-
-            // Block transmitting
-            return Plugin_Handled;
-        }
-    }
-    
-    // Gets the owner of the entity
-    int ownerIndex = ToolsGetEntityOwner(entityIndex);
-
-    // Validate dead owner
-    if(!IsPlayerAlive(ownerIndex))
-    {
-        // Block transmitting
-        return Plugin_Handled;
-    }
-    
-    // Validate observer mode
-    if(ToolsGetClientObserverMode(clientIndex) == SPECMODE_FIRSTPERSON && ownerIndex == ToolsGetClientObserverTarget(clientIndex))
-    {
-        // Block transmitting
-        return Plugin_Handled;
-    }
-
-    // Allow transmitting
-    return Plugin_Continue;
-}
-
 /*
  * Stocks attachment API.
  */
@@ -146,7 +77,7 @@ public Action WeaponAttachOnTransmit(int entityIndex, int clientIndex)
 void WeaponAttachSetAddons(int clientIndex)
 {
     // Gets current bits
-    int iBits = ToolsGetClientAddonBits(clientIndex); int iBitPurge; static int weaponIndex; static int iD;
+    int iBits = ToolsGetAddonBits(clientIndex); int iBitPurge; static int weaponIndex; static int iD;
     
     /*____________________________________________________________________________________________*/
     
@@ -157,10 +88,10 @@ void WeaponAttachSetAddons(int clientIndex)
         if(!(gClientData[clientIndex].AttachmentBits & CSAddon_PrimaryWeapon))
         {
             // Gets weapon index
-            weaponIndex = GetPlayerWeaponSlot(clientIndex, view_as<int>(SlotType_Primary));
+            weaponIndex = GetPlayerWeaponSlot(clientIndex, SlotType_Primary);
             
             // Validate weapon
-            if(IsValidEdict(weaponIndex))
+            if(weaponIndex != INVALID_ENT_REFERENCE)
             {
                 // Validate custom index
                 iD = WeaponsGetCustomID(weaponIndex);
@@ -187,17 +118,17 @@ void WeaponAttachSetAddons(int clientIndex)
         if(!(gClientData[clientIndex].AttachmentBits & CSAddon_SecondaryWeapon))
         {
             // Gets weapon index
-            weaponIndex = GetPlayerWeaponSlot(clientIndex, view_as<int>(SlotType_Secondary));
+            weaponIndex = GetPlayerWeaponSlot(clientIndex, SlotType_Secondary);
 
             // Validate taser slot
-            if(weaponIndex == ToolsGetClientActiveWeapon(clientIndex))
+            if(weaponIndex == ToolsGetActiveWeapon(clientIndex))
             {
                 // Gets weapon index
                 weaponIndex = WeaponsGetIndex(clientIndex, "weapon_taser");
             }
             
             // Validate weapon
-            if(IsValidEdict(weaponIndex))
+            if(weaponIndex != INVALID_ENT_REFERENCE)
             {
                 // Validate custom index
                 iD = WeaponsGetCustomID(weaponIndex);
@@ -374,10 +305,10 @@ void WeaponAttachSetAddons(int clientIndex)
         if(!(gClientData[clientIndex].AttachmentBits & CSAddon_Knife))
         {
             // Gets weapon index
-            weaponIndex = GetPlayerWeaponSlot(clientIndex, view_as<int>(SlotType_Melee));
+            weaponIndex = GetPlayerWeaponSlot(clientIndex, SlotType_Melee);
             
             // Validate weapon
-            if(IsValidEdict(weaponIndex))
+            if(weaponIndex != INVALID_ENT_REFERENCE)
             {
                 // Validate custom index
                 iD = WeaponsGetCustomID(weaponIndex);
@@ -434,10 +365,10 @@ void WeaponAttachSetAddons(int clientIndex)
         if(!(gClientData[clientIndex].AttachmentBits & CSAddon_C4))
         {
             // Gets weapon index
-            weaponIndex = GetPlayerWeaponSlot(clientIndex, view_as<int>(SlotType_C4));
+            weaponIndex = GetPlayerWeaponSlot(clientIndex, SlotType_C4);
             
             // Validate weapon
-            if(IsValidEdict(weaponIndex))
+            if(weaponIndex != INVALID_ENT_REFERENCE)
             {
                 // Validate custom index
                 iD = WeaponsGetCustomID(weaponIndex);
@@ -464,7 +395,7 @@ void WeaponAttachSetAddons(int clientIndex)
         if(!(gClientData[clientIndex].AttachmentBits & CSAddon_DefuseKit))
         {
             // Validate defuser
-            if(ToolsGetClientDefuser(clientIndex))
+            if(ToolsGetDefuser(clientIndex))
             {
                 // Validate custom index
                 iD = WeaponsGetCustomID(clientIndex);
@@ -527,12 +458,12 @@ void WeaponAttachSetAddons(int clientIndex)
     }
     if(EntRefToEntIndex(gClientData[clientIndex].AttachmentAddons[BitType_DefuseKit]) != INVALID_ENT_REFERENCE)
     {
-        iBitPurge |= CSAddon_DefuseKit; if(!ToolsGetClientDefuser(clientIndex)) WeaponAttachRemoveAddons(clientIndex, BitType_DefuseKit);
+        iBitPurge |= CSAddon_DefuseKit; if(!ToolsGetDefuser(clientIndex)) WeaponAttachRemoveAddons(clientIndex, BitType_DefuseKit);
     }
     
     // Store the bits for next usage
     gClientData[clientIndex].AttachmentBits = iBits;
-    ToolsSetClientAddonBits(clientIndex, iBits &~ iBitPurge);
+    ToolsSetAddonBits(clientIndex, iBits &~ iBitPurge);
 }
 
 /**
@@ -540,13 +471,13 @@ void WeaponAttachSetAddons(int clientIndex)
  *
  * @param clientIndex       The client index.
  * @param iD                The weapon id.
- * @param bitType           The bit type.
+ * @param mBits             The bits type.
  * @param sAttach           The attachment name.
  **/
-void WeaponAttachCreateAddons(int clientIndex, int iD, BitType bitType, char[] sAttach)
+void WeaponAttachCreateAddons(int clientIndex, int iD, BitType mBits, char[] sAttach)
 {
     // Remove current addons
-    WeaponAttachRemoveAddons(clientIndex, bitType);
+    WeaponAttachRemoveAddons(clientIndex, mBits);
 
     // If dropmodel exist, then apply it
     if(WeaponsGetModelDropID(iD))
@@ -554,48 +485,33 @@ void WeaponAttachCreateAddons(int clientIndex, int iD, BitType bitType, char[] s
         // Validate attachment
         if(ToolsLookupAttachment(clientIndex, sAttach))
         {
+            // Gets weapon dropmodel
+            static char sModel[PLATFORM_LINE_LENGTH];
+            WeaponsGetModelDrop(iD, sModel, sizeof(sModel)); 
+    
             // Create an attach addon entity 
-            int entityIndex = CreateEntityByName("prop_dynamic_override");
+            int entityIndex = UTIL_CreateDynamic("backback", NULL_VECTOR, NULL_VECTOR, sModel);
             
             // If entity isn't valid, then skip
             if(entityIndex != INVALID_ENT_REFERENCE)
             {
-                // Gets weapon dropmodel
-                static char sModel[PLATFORM_LINE_LENGTH];
-                WeaponsGetModelDrop(iD, sModel, sizeof(sModel)); 
+                // Sets bodygroup/skin for the entity
+                ToolsSetTextures(entityIndex, WeaponsGetModelBody(iD, ModelType_Drop), WeaponsGetModelSkin(iD, ModelType_Drop)); 
 
-                // Dispatch main values of the entity
-                DispatchKeyValue(entityIndex, "model", sModel);
-                DispatchKeyValue(entityIndex, "spawnflags", "256"); /// Start with collision disabled
-                DispatchKeyValue(entityIndex, "solid", "0");
-               
-                // Sets bodygroup of the entity
-                SetVariantInt(WeaponsGetModelBody(iD, ModelType_Drop));
-                AcceptEntityInput(entityIndex, "SetBodyGroup");
-                
-                // Sets skin of the entity
-                SetVariantInt(WeaponsGetModelSkin(iD, ModelType_Drop));
-                AcceptEntityInput(entityIndex, "ModelSkin");
-                
-                // Spawn the entity into the world
-                DispatchSpawn(entityIndex);
-                
                 // Sets parent to the entity
-                ToolsSetEntityOwner(entityIndex, clientIndex);
-                
-                // Sets parent to the client
                 SetVariantString("!activator");
                 AcceptEntityInput(entityIndex, "SetParent", clientIndex, entityIndex);
+                ToolsSetOwner(entityIndex, clientIndex);
                 
-                // Sets attachment to the client
+                // Sets attachment to the entity
                 SetVariantString(sAttach);
                 AcceptEntityInput(entityIndex, "SetParentAttachment", clientIndex, entityIndex);
                 
                 // Hook entity callbacks
-                SDKHook(entityIndex, SDKHook_SetTransmit, WeaponAttachOnTransmit);
+                SDKHook(entityIndex, SDKHook_SetTransmit, ToolsOnEntityTransmit);
                 
                 // Store the client cache
-                gClientData[clientIndex].AttachmentAddons[bitType] = EntIndexToEntRef(entityIndex);
+                gClientData[clientIndex].AttachmentAddons[mBits] = EntIndexToEntRef(entityIndex);
             }
         }
     }
@@ -605,12 +521,12 @@ void WeaponAttachCreateAddons(int clientIndex, int iD, BitType bitType, char[] s
  * @brief Remove an attachment addons entities from the client.
  *
  * @param clientIndex       The client index.
- * @param bitType           The bit type.
+ * @param mBits             The bits type.
  **/
-void WeaponAttachRemoveAddons(int clientIndex, BitType bitType = BitType_Invalid) 
+void WeaponAttachRemoveAddons(int clientIndex, BitType mBits = BitType_Invalid) 
 {
     // Validate all
-    if(bitType == BitType_Invalid)
+    if(mBits == BitType_Invalid)
     {
         // i = slot index
         for(BitType i = BitType_PrimaryWeapon; i <= BitType_DefuseKit; i++)
@@ -632,7 +548,7 @@ void WeaponAttachRemoveAddons(int clientIndex, BitType bitType = BitType_Invalid
     else
     {
         // Gets current addon from the client reference
-        int entityIndex = EntRefToEntIndex(gClientData[clientIndex].AttachmentAddons[bitType]);
+        int entityIndex = EntRefToEntIndex(gClientData[clientIndex].AttachmentAddons[mBits]);
 
         // Validate addon
         if(entityIndex != INVALID_ENT_REFERENCE) 
@@ -642,6 +558,6 @@ void WeaponAttachRemoveAddons(int clientIndex, BitType bitType = BitType_Invalid
 
         // Clear the client cache
         gClientData[clientIndex].AttachmentBits = CSAddon_NONE;
-        gClientData[clientIndex].AttachmentAddons[bitType] = INVALID_ENT_REFERENCE;
+        gClientData[clientIndex].AttachmentAddons[mBits] = INVALID_ENT_REFERENCE;
     }
 }

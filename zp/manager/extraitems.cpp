@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -85,14 +85,6 @@ void ExtraItemsOnLoad(/*void*/)
         return;
     }
 
-    // Validate extraitems config
-    int iSize = gServerData.ExtraItems.Length;
-    if(!iSize)
-    {
-        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_ExtraItems, "Config Validation", "No usable data found in extraitems config file: \"%s\"", sPathItems);
-        return;
-    }
-
     // Now copy data to array structure
     ExtraItemsOnCacheData();
 
@@ -121,9 +113,16 @@ void ExtraItemsOnCacheData(/*void*/)
         LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_ExtraItems, "Config Validation", "Unexpected error caching data from extraitems config file: \"%s\"", sPathItems);
         return;
     }
+    
+    // Validate size
+    int iSize = gServerData.ExtraItems.Length;
+    if(!iSize)
+    {
+        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_ExtraItems, "Config Validation", "No usable data found in extraitems config file: \"%s\"", sPathItems);
+        return;
+    }
 
     // i = array index
-    int iSize = gServerData.ExtraItems.Length;
     for(int i = 0; i < iSize; i++)
     {
         // General
@@ -253,7 +252,7 @@ public int API_GiveClientExtraItem(Handle hPlugin, int iNumParams)
     }
 
     // Call forward
-    static Action resultHandle;
+    Action resultHandle;
     gForwardData._OnClientValidateExtraItem(clientIndex, iD, resultHandle);
 
     // Validate handle
@@ -300,7 +299,7 @@ public int API_SetClientExtraItemLimit(Handle hPlugin, int iNumParams)
     
     // Return on success
     return iD;
-}
+    }
 
 /**
  * @brief Gets the buy limit of the current player item.
@@ -898,7 +897,7 @@ void ItemsMenu(int clientIndex)
     hMenu.SetTitle("%t", "buy extraitems");
     
     // Initialize forward
-    static Action resultHandle;
+    Action resultHandle;
     
     // i = extraitem index
     int iSize = gServerData.ExtraItems.Length;
@@ -1000,18 +999,16 @@ public int ItemsMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int m
                 return;
             }
 
-            // Initialize name char
-            static char sItemName[SMALL_LINE_LENGTH];
-
             // Gets menu info
-            hMenu.GetItem(mSlot, sItemName, sizeof(sItemName));
-            int iD = StringToInt(sItemName);
+            static char sBuffer[SMALL_LINE_LENGTH];
+            hMenu.GetItem(mSlot, sBuffer, sizeof(sBuffer));
+            int iD = StringToInt(sBuffer);
             
             // Gets extra item name
-            ItemsGetName(iD, sItemName, sizeof(sItemName));
+            ItemsGetName(iD, sBuffer, sizeof(sBuffer));
             
             // Call forward
-            static Action resultHandle;
+            Action resultHandle;
             gForwardData._OnClientValidateExtraItem(clientIndex, iD, resultHandle);
 
             // Validate handle
@@ -1024,20 +1021,24 @@ public int ItemsMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int m
                     gForwardData._OnClientBuyExtraItem(clientIndex, iD); /// Buy item
             
                     // If help messages enabled, then show info
-                    if(gCvarList[CVAR_MESSAGES_HELP].BoolValue)
+                    if(gCvarList[CVAR_MESSAGES_ITEM_ALL].BoolValue)
                     {
                         // Gets client name
-                        static char sItemInfo[BIG_LINE_LENGTH];
-                        GetClientName(clientIndex, sItemInfo, sizeof(sItemInfo));
+                        static char sClient[SMALL_LINE_LENGTH];
+                        GetClientName(clientIndex, sClient, sizeof(sClient));
 
                         // Show item buying info
-                        TranslationPrintToChatAll("extraitem info", sItemInfo, sItemName);
-                        
+                        TranslationPrintToChatAll("buy info", sClient, sBuffer);
+                    }
+                
+                    // If help messages enabled, then show info
+                    if(gCvarList[CVAR_MESSAGES_ITEM_INFO].BoolValue)
+                    {
                         // Gets item info
-                        ItemsGetInfo(iD, sItemInfo, sizeof(sItemInfo));
+                        ItemsGetInfo(iD, sBuffer, sizeof(sBuffer));
                         
                         // Show item personal info
-                        if(hasLength(sItemInfo)) TranslationPrintHintText(clientIndex, sItemInfo);
+                        if(hasLength(sBuffer)) TranslationPrintHintText(clientIndex, sBuffer);
                     }
                     
                     // If item has a cost
@@ -1061,7 +1062,7 @@ public int ItemsMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int m
             }
 
             // Show block info
-            TranslationPrintHintText(clientIndex, "buying item block", sItemName);
+            TranslationPrintHintText(clientIndex, "buying item block", sBuffer);
     
             // Emit error sound
             ClientCommand(clientIndex, "play buttons/button11.wav");    

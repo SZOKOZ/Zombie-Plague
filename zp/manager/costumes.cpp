@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -98,9 +98,17 @@ void CostumesOnInit(/*void*/)
     // Load offsets
     fnInitGameConfOffset(gServerData.SDKTools, DHook_SetEntityModel, /*CBasePlayer::*/"SetEntityModel");
 
-    /// CCSPlayer::SetModel(CBasePlayer *this, char const*)
+    /// CBasePlayer::SetModel(CBasePlayer *this, char const*)
     hDHookSetEntityModel = DHookCreate(DHook_SetEntityModel, HookType_Entity, ReturnType_Void, ThisPointer_CBaseEntity, CostumesDhookOnSetEntityModel);
     DHookAddParam(hDHookSetEntityModel, HookParamType_CharPtr);
+    
+    // Validate hook
+    if(hDHookSetEntityModel == null)
+    {
+        // Log failure
+        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Costumes, "GameData Validation", "Failed to create DHook for \"CBasePlayer::SetEntityModel\". Update \"SourceMod\"");
+        return;
+    }
     #endif
 }
 
@@ -112,7 +120,7 @@ void CostumesOnLoad(/*void*/)
     // Register config file
     ConfigRegisterConfig(File_Costumes, Structure_Keyvalue, CONFIG_FILE_ALIAS_COSTUMES);
 
-    // If module is disabled, then stop
+    // If costumes is disabled, then stop
     if(!gCvarList[CVAR_COSTUMES].BoolValue)
     {
         return;
@@ -140,14 +148,6 @@ void CostumesOnLoad(/*void*/)
     if(!bSuccess)
     {
         LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Costumes, "Config Validation", "Unexpected error encountered loading: %s", sPathCostumes);
-        return;
-    }
-
-    // Validate costumes config
-    int iSize = gServerData.Costumes.Length;
-    if(!iSize)
-    {
-        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Costumes, "Config Validation", "No usable data found in costumes config file: %s", sPathCostumes);
         return;
     }
 
@@ -180,8 +180,15 @@ void CostumesOnCacheData(/*void*/)
         return;
     }
 
-    // i = array index
+    // Validate size
     int iSize = gServerData.Costumes.Length;
+    if(!iSize)
+    {
+        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Costumes, "Config Validation", "No usable data found in costumes config file: %s", sPathCostumes);
+        return;
+    }
+    
+    // i = array index
     for(int i = 0; i < iSize; i++)
     {
         // General
@@ -308,6 +315,17 @@ void CostumesOnClientInit(int clientIndex)
 }
 
 /**
+ * @brief Client has been killed.
+ * 
+ * @param clientIndex       The client index.
+ **/
+void CostumesOnClientDeath(int clientIndex)
+{
+    // Remove current costume
+    CostumesRemove(clientIndex);
+}
+
+/**
  * Console command callback (zp_costume_menu)
  * @brief Opens the costumes menu.
  * 
@@ -338,50 +356,6 @@ public void CostumesOnCvarHook(ConVar hConVar, char[] oldValue, char[] newValue)
     
     // Forward event to modules
     CostumesOnInit();
-}
-
-/**
- * Hook: SetTransmit
- * @brief Called right before the entity transmitting to other entities.
- *
- * @param entityIndex       The entity index.
- * @param clientIndex       The client index.
- **/
-public Action CostumesOnTransmit(int entityIndex, int clientIndex)
-{
-    // Validate addons
-    if(EntRefToEntIndex(gClientData[clientIndex].AttachmentCostume) == entityIndex)
-    {
-        // Validate observer mode
-        if(ToolsGetClientObserverMode(clientIndex))
-        {
-            // Allow transmitting    
-            return Plugin_Continue;
-        }
-
-        // Block transmitting
-        return Plugin_Handled;
-    }
-    
-    // Gets the owner of the entity
-    int ownerIndex = ToolsGetEntityOwner(entityIndex);
-
-    // Validate dead owner
-    if(!IsPlayerAlive(ownerIndex))
-    {
-        // Block transmitting
-        return Plugin_Handled;
-    }
-    
-    // Validate observer mode
-    if(ToolsGetClientObserverMode(clientIndex) == SPECMODE_FIRSTPERSON && ownerIndex == ToolsGetClientObserverTarget(clientIndex))
-    {
-        // Block transmitting
-        return Plugin_Handled;
-    }
-
-    // Allow transmitting
-    return Plugin_Continue;
 }
 
 /*
@@ -456,7 +430,7 @@ public int API_SetClientCostume(Handle hPlugin, int iNumParams)
     }
     
     // Call forward
-    static Action resultHandle;
+    Action resultHandle;
     gForwardData._OnClientValidateCostume(clientIndex, iD, resultHandle);
 
     // Validate handle
@@ -1036,7 +1010,7 @@ void CostumesMenu(int clientIndex)
     hMenu.SetTitle("%t", "costumes menu");
     
     // Initialize forward
-    static Action resultHandle;
+    Action resultHandle;
     
     // i = array index
     int iSize = gServerData.Costumes.Length;
@@ -1119,15 +1093,13 @@ public int CostumesMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, in
                 return;
             }
             
-            // Initialize key char
-            static char sKey[SMALL_LINE_LENGTH];
-
             // Gets menu info
-            hMenu.GetItem(mSlot, sKey, sizeof(sKey));
-            int iD = StringToInt(sKey);
+            static char sBuffer[SMALL_LINE_LENGTH];
+            hMenu.GetItem(mSlot, sBuffer, sizeof(sBuffer));
+            int iD = StringToInt(sBuffer);
             
             // Call forward
-            static Action resultHandle;
+            Action resultHandle;
             gForwardData._OnClientValidateCostume(clientIndex, iD, resultHandle);
             
             // Validate handle
@@ -1200,38 +1172,23 @@ void CostumesCreateEntity(int clientIndex)
             return;
         }
 
+        // Gets costume model
+        static char sModel[PLATFORM_LINE_LENGTH];
+        CostumesGetModel(gClientData[clientIndex].Costume, sModel, sizeof(sModel));
+        
         // Creates an attach addon entity 
-        int entityIndex = CreateEntityByName("prop_dynamic_override");
+        int entityIndex = UTIL_CreateDynamic("costume", NULL_VECTOR, NULL_VECTOR, sModel);
         
         // If entity isn't valid, then skip
         if(entityIndex != INVALID_ENT_REFERENCE)
         {
-            // Gets costume model
-            static char sModel[PLATFORM_LINE_LENGTH];
-            CostumesGetModel(gClientData[clientIndex].Costume, sModel, sizeof(sModel)); 
+            // Sets bodygroup/skin for the entity
+            ToolsSetTextures(entityIndex, CostumesGetBody(gClientData[clientIndex].Costume), CostumesGetSkin(gClientData[clientIndex].Costume)); 
 
-            // Dispatch main values of the entity
-            DispatchKeyValue(entityIndex, "model", sModel);
-            DispatchKeyValue(entityIndex, "spawnflags", "256"); /// Start with collision disabled
-            DispatchKeyValue(entityIndex, "solid", "0");
-           
-            // Sets bodygroup of the entity
-            SetVariantInt(CostumesGetBody(gClientData[clientIndex].Costume));
-            AcceptEntityInput(entityIndex, "SetBodyGroup");
-            
-            // Sets skin of the entity
-            SetVariantInt(CostumesGetSkin(gClientData[clientIndex].Costume));
-            AcceptEntityInput(entityIndex, "ModelSkin");
-            
-            // Spawn the entity into the world
-            DispatchSpawn(entityIndex);
-            
             // Sets parent to the entity
-            ToolsSetEntityOwner(entityIndex, clientIndex);
-            
-            // Sets parent to the client
             SetVariantString("!activator");
             AcceptEntityInput(entityIndex, "SetParent", clientIndex, entityIndex);
+            ToolsSetOwner(entityIndex, clientIndex);
 
             // Gets costume attachment
             static char sAttach[SMALL_LINE_LENGTH];
@@ -1240,18 +1197,18 @@ void CostumesCreateEntity(int clientIndex)
             // Validate attachment
             if(ToolsLookupAttachment(clientIndex, sAttach))
             {
-                // Sets attachment to the client
+                // Sets attachment to the entity
                 SetVariantString(sAttach);
                 AcceptEntityInput(entityIndex, "SetParentAttachment", clientIndex, entityIndex);
             }
             else
             {
                 // Initialize vector variables
-                static float vOrigin[3]; static float vAngle[3]; static float vEntOrigin[3]; static float vEntAngle[3]; static float vForward[3]; static float vRight[3];  static float vVertical[3]; 
+                static float vPosition[3]; static float vAngle[3]; static float vEntOrigin[3]; static float vEntAngle[3]; static float vForward[3]; static float vRight[3];  static float vVertical[3]; 
 
                 // Gets client position
-                GetClientAbsOrigin(clientIndex, vOrigin); 
-                GetClientAbsAngles(clientIndex, vAngle);
+                ToolsGetAbsOrigin(clientIndex, vPosition); 
+                ToolsGetAbsAngles(clientIndex, vAngle);
                 
                 // Gets costume position
                 CostumesGetPosition(gClientData[clientIndex].Costume, vEntOrigin);
@@ -1266,19 +1223,21 @@ void CostumesCreateEntity(int clientIndex)
                 GetAngleVectors(vAngle, vForward, vRight, vVertical);
                 
                 // Calculate ends point by applying all vectors distances 
-                vOrigin[0] += (vForward[0] * vEntOrigin[0]) + (vRight[0] * vEntOrigin[1]) + (vVertical[0] * vEntOrigin[2]);
-                vOrigin[1] += (vForward[1] * vEntOrigin[0]) + (vRight[1] * vEntOrigin[1]) + (vVertical[1] * vEntOrigin[2]);
-                vOrigin[2] += (vForward[2] * vEntOrigin[0]) + (vRight[2] * vEntOrigin[1]) + (vVertical[2] * vEntOrigin[2]);
+                vPosition[0] += (vForward[0] * vEntOrigin[0]) + (vRight[0] * vEntOrigin[1]) + (vVertical[0] * vEntOrigin[2]);
+                vPosition[1] += (vForward[1] * vEntOrigin[0]) + (vRight[1] * vEntOrigin[1]) + (vVertical[1] * vEntOrigin[2]);
+                vPosition[2] += (vForward[2] * vEntOrigin[0]) + (vRight[2] * vEntOrigin[1]) + (vVertical[2] * vEntOrigin[2]);
 
-                // Spawn the entity
-                TeleportEntity(entityIndex, vOrigin, vAngle, NULL_VECTOR);
+                // Teleport the entity
+                ///DispatchKeyValueVector(entityIndex, "origin", vPosition);
+                ///DispatchKeyValueVector(entityIndex, "angles", vAngle);
+                TeleportEntity(entityIndex, vPosition, vAngle, NULL_VECTOR);
             }
         
             // Validate merging
             if(CostumesIsMerge(gClientData[clientIndex].Costume)) CostumesBoneMerge(entityIndex);
 
             // Hook entity callbacks
-            if(CostumesIsHide(gClientData[clientIndex].Costume)) SDKHook(entityIndex, SDKHook_SetTransmit, CostumesOnTransmit);
+            if(CostumesIsHide(gClientData[clientIndex].Costume)) SDKHook(entityIndex, SDKHook_SetTransmit, ToolsOnEntityTransmit);
             
             // Store the client cache
             gClientData[clientIndex].AttachmentCostume = EntIndexToEntRef(entityIndex);
@@ -1294,7 +1253,7 @@ void CostumesCreateEntity(int clientIndex)
 void CostumesBoneMerge(int entityIndex)
 {
     // Gets current effects
-    int iEffects = ToolsGetEntityEffect(entityIndex); 
+    int iEffects = ToolsGetEffect(entityIndex); 
 
     // Sets merging
     iEffects &= ~EF_NODRAW;
@@ -1302,7 +1261,7 @@ void CostumesBoneMerge(int entityIndex)
     iEffects |= EF_BONEMERGE_FASTCULL;
 
     // Sets value on the entity
-    ToolsSetEntityEffect(entityIndex, iEffects); 
+    ToolsSetEffect(entityIndex, iEffects); 
 }
 
 /**

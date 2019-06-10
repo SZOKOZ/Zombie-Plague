@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -154,15 +154,15 @@ public void ZP_OnClientUpdated(int clientIndex, int attackerIndex)
  * @brief Called before show an extraitem in the equipment menu.
  * 
  * @param clientIndex       The client index.
- * @param extraitemIndex    The item index.
+ * @param itemID            The item index.
  *
  * @return                  Plugin_Handled to disactivate showing and Plugin_Stop to disabled showing. Anything else
  *                              (like Plugin_Continue) to allow showing and calling the ZP_OnClientBuyExtraItem() forward.
  **/
-public Action ZP_OnClientValidateExtraItem(int clientIndex, int extraitemIndex)
+public Action ZP_OnClientValidateExtraItem(int clientIndex, int itemID)
 {
     // Check the item index
-    if(extraitemIndex == gItem)
+    if(itemID == gItem)
     {
         // Validate access
         if(GetEntProp(clientIndex, Prop_Send, "m_bHasDefuser"))
@@ -179,12 +179,12 @@ public Action ZP_OnClientValidateExtraItem(int clientIndex, int extraitemIndex)
  * @brief Called after select an extraitem in the equipment menu.
  * 
  * @param clientIndex       The client index.
- * @param extraitemIndex    The item index.
+ * @param itemID            The item index.
  **/
-public void ZP_OnClientBuyExtraItem(int clientIndex, int extraitemIndex)
+public void ZP_OnClientBuyExtraItem(int clientIndex, int itemID)
 {
     // Check the item index
-    if(extraitemIndex == gItem)
+    if(itemID == gItem)
     {
         // Give item and select it
         ZP_GiveClientWeapon(clientIndex, gWeapon);
@@ -208,7 +208,7 @@ void Item_OnActivate(int clientIndex)
     if(gItemDuration[clientIndex] < ZP_GetWeaponClip(gWeapon))
     {
         // Initialize vectors
-        static float vPosition[3]; static float vVelocity[3]; static float vAngle[3];
+        static float vPosition[3]; static float vAngle[3]; static float vVelocity[3]; 
         
         // Gets client angle
         GetClientEyeAngles(clientIndex, vAngle); vAngle[0] = -40.0;
@@ -222,10 +222,8 @@ void Item_OnActivate(int clientIndex)
         // Push the player
         TeleportEntity(clientIndex, NULL_VECTOR, NULL_VECTOR, vVelocity);
         
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound));
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 1, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
         
         // Gets backback index
         int entityIndex = ZP_GetClientAttachModel(clientIndex, BitType_DefuseKit);
@@ -236,8 +234,12 @@ void Item_OnActivate(int clientIndex)
             // Gets attachment position
             ZP_GetAttachment(entityIndex, "1", vPosition, vAngle);
             
+            // Gets weapon muzzleflesh
+            static char sMuzzle[NORMAL_LINE_LENGTH];
+            ZP_GetWeaponModelMuzzle(gWeapon, sMuzzle, sizeof(sMuzzle));
+            
             // Create an effect
-            ZP_CreateParticle(entityIndex, vPosition, _, "smoking", 0.5);
+            UTIL_CreateParticle(entityIndex, vPosition, _, _, sMuzzle, 0.5);
         }
     }
     else

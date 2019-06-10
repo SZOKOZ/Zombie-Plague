@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -42,7 +42,7 @@ public Plugin myinfo =
 }
 
 /**
- * @section Information about weapon.
+ * @section Information about the weapon.
  **/
 #define WEAPON_ACTIVE_COUNTER       15
 #define WEAPON_TIME_DELAY_ACTIVE    0.083
@@ -107,13 +107,12 @@ void Weapon_OnDeploy(int clientIndex, int weaponIndex, int iClip, int iAmmo, int
     ZP_SetWeaponAnimation(clientIndex, ANIM_DRAW); 
 }
 
-void Weapon_OnEndAttack(int clientIndex, int weaponIndex, int iClip, int iAmmo, int iCounter, int iStateMode, float flCurrentTime)
+void Weapon_OnReload(int clientIndex, int weaponIndex, int iClip, int iAmmo, int iCounter, int iStateMode, float flCurrentTime)
 {
     #pragma unused clientIndex, weaponIndex, iClip, iAmmo, iCounter, iStateMode, flCurrentTime
 
-    // Reset variables
-    SetEntProp(weaponIndex, Prop_Data, "m_iIKCounter", 0);
-    SetEntProp(weaponIndex, Prop_Send, "m_iClip2", STATE_NORMAL);
+    // Sets default FOV for the client
+    SetEntProp(clientIndex, Prop_Send, "m_iFOV", GetEntProp(clientIndex, Prop_Send, "m_iDefaultFOV"));
 }
 
 void Weapon_OnFire(int clientIndex, int weaponIndex, int iClip, int iAmmo, int iCounter, int iStateMode, float flCurrentTime)
@@ -160,7 +159,7 @@ void Weapon_OnShoot(int clientIndex, int weaponIndex, int iClip, int iAmmo, int 
     if(!iAmmo)
     {
         // Sets normal mode
-        SetEntProp(weaponIndex, Prop_Send, "m_iClip2", STATE_NORMAL);
+        SetEntProp(weaponIndex, Prop_Data, "m_iHealth", STATE_NORMAL);
     }
     else
     {
@@ -168,24 +167,40 @@ void Weapon_OnShoot(int clientIndex, int weaponIndex, int iClip, int iAmmo, int 
         if(iCounter > WEAPON_ACTIVE_COUNTER)
         {
             // Sets active mode
-            SetEntProp(weaponIndex, Prop_Send, "m_iClip2", STATE_ACTIVE);
+            SetEntProp(weaponIndex, Prop_Data, "m_iHealth", STATE_ACTIVE);
 
-            // Resets the shots count
+            // Sets the shots count
             iCounter = -1;
         }
         
         // Sets shots count
-        SetEntProp(weaponIndex, Prop_Data, "m_iIKCounter", iCounter + 1);
+        SetEntProp(weaponIndex, Prop_Data, "m_iMaxHealth", iCounter + 1);
         
         // Validate mode
         if(iStateMode)
         {
-            // Emit sound
-            static char sSound[PLATFORM_LINE_LENGTH];
-            ZP_GetSound(gSound, sSound, sizeof(sSound), 1); 
-            EmitSoundToAll(sSound, clientIndex, SNDCHAN_WEAPON, hSoundLevel.IntValue);
+            // Play sound
+            ZP_EmitSoundToAll(gSound, 1, clientIndex, SNDCHAN_WEAPON, hSoundLevel.IntValue);
         }
     }
+}
+
+void Weapon_OnSecondaryAttack(int clientIndex, int weaponIndex, int iClip, int iAmmo, int iCounter, int iStateMode, float flCurrentTime)
+{
+    #pragma unused clientIndex, weaponIndex, iClip, iAmmo, iCounter, iStateMode, flCurrentTime
+    
+    // Validate animation delay
+    if(GetEntPropFloat(weaponIndex, Prop_Send, "m_flNextPrimaryAttack") > flCurrentTime)
+    {
+        return;
+    }
+    
+    // Sets next attack time
+    SetEntPropFloat(weaponIndex, Prop_Send, "m_flNextPrimaryAttack", flCurrentTime + 0.3);
+    
+    // Sets FOV for the client
+    int iDefaultFOV = GetEntProp(clientIndex, Prop_Send, "m_iDefaultFOV");
+    SetEntProp(clientIndex, Prop_Send, "m_iFOV", GetEntProp(clientIndex, Prop_Send, "m_iFOV") == iDefaultFOV ? 55 : iDefaultFOV);
 }
 
 //**********************************************
@@ -203,9 +218,9 @@ void Weapon_OnShoot(int clientIndex, int weaponIndex, int iClip, int iAmmo, int 
                                 \
         GetEntProp(%2, Prop_Send, "m_iPrimaryReserveAmmoCount"), \
                                 \
-        GetEntProp(%2, Prop_Data, "m_iIKCounter"), \
+        GetEntProp(%2, Prop_Data, "m_iMaxHealth"), \
                                 \
-        GetEntProp(%2, Prop_Send, "m_iClip2"), \
+        GetEntProp(%2, Prop_Data, "m_iHealth"), \
                                 \
         GetGameTime()           \
     )    
@@ -223,8 +238,8 @@ public void ZP_OnWeaponCreated(int clientIndex, int weaponIndex, int weaponID)
     if(weaponID == gWeapon)
     {
         // Reset variables
-        SetEntProp(weaponIndex, Prop_Data, "m_iIKCounter", 0);
-        SetEntProp(weaponIndex, Prop_Send, "m_iClip2", STATE_NORMAL);
+        SetEntProp(weaponIndex, Prop_Data, "m_iMaxHealth", 0);
+        SetEntProp(weaponIndex, Prop_Data, "m_iHealth", STATE_NORMAL);
     }
 }  
     
@@ -263,6 +278,23 @@ public void ZP_OnWeaponDeploy(int clientIndex, int weaponIndex, int weaponID)
 }
 
 /**
+ * @brief Called on reload of a weapon.
+ *
+ * @param clientIndex       The client index.
+ * @param weaponIndex       The weapon index.
+ * @param weaponID          The weapon id.
+ **/
+public void ZP_OnWeaponReload(int clientIndex, int weaponIndex, int weaponID)
+{
+    // Validate custom weapon
+    if(weaponID == gWeapon)
+    {
+        // Call event
+        _call.Reload(clientIndex, weaponIndex);
+    }
+}
+
+/**
  * @brief Called on fire of a weapon.
  *
  * @param clientIndex       The client index.
@@ -297,7 +329,7 @@ public Action ZP_OnWeaponRunCmd(int clientIndex, int &iButtons, int iLastButtons
     if(weaponID == gWeapon)
     {
         // Validate state
-        if(GetEntProp(weaponIndex, Prop_Send, "m_iClip2"))
+        if(GetEntProp(weaponIndex, Prop_Data, "m_iHealth"))
         {
             // Switch animation
             switch(ZP_GetWeaponAnimation(clientIndex))
@@ -307,10 +339,20 @@ public Action ZP_OnWeaponRunCmd(int clientIndex, int &iButtons, int iLastButtons
         }
 
         // Button primary attack release
-        if(!(iButtons & IN_ATTACK)) 
+        if(!(iButtons & IN_ATTACK))
         {
-            // Call event
-            _call.EndAttack(clientIndex, weaponIndex);
+            // Button secondary attack press
+            if(iButtons & IN_ATTACK2)
+            {
+                // Call event
+                _call.SecondaryAttack(clientIndex, weaponIndex);
+                iButtons &= (~IN_ATTACK2); //! Bugfix
+                return Plugin_Changed;
+            }
+            
+            // Reset variables
+            SetEntProp(weaponIndex, Prop_Data, "m_iMaxHealth", 0);
+            SetEntProp(weaponIndex, Prop_Data, "m_iHealth", STATE_NORMAL);
         }
     }
     

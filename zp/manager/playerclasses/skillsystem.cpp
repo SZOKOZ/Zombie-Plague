@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -51,8 +51,8 @@ static char SkillSystemMax[BAR_MAX_LENGTH] = "__________________________________
 void SkillSystemOnInit(/*void*/)
 {
     // Creates HUD synchronization objects
-    gServerData.Skill[0] = CreateHudSynchronizer();
-    gServerData.Skill[1] = CreateHudSynchronizer();
+    gServerData.SkillSync[0] = CreateHudSynchronizer();
+    gServerData.SkillSync[1] = CreateHudSynchronizer();
 } 
  
 /**
@@ -191,7 +191,7 @@ void SkillSystemOnClientStart(int clientIndex)
     if(!gClientData[clientIndex].Skill && gClientData[clientIndex].SkillCounter <= 0.0)
     {
         // Call forward
-        static Action resultHandle; 
+        Action resultHandle; 
         gForwardData._OnClientSkillUsed(clientIndex, resultHandle);
         
         // Block skill usage
@@ -208,7 +208,7 @@ void SkillSystemOnClientStart(int clientIndex)
         {
             // Resets bar string 
             strcopy(SkillSystemBar[clientIndex], sizeof(SkillSystemBar[]), SkillSystemMax);
-            gClientData[clientIndex].SkillCounter = flInterval; //! Update skill time usage
+            gClientData[clientIndex].SkillCounter = flInterval; /// Update skill time usage
         
             // Sets timer for showing bar
             delete gClientData[clientIndex].BarTimer;
@@ -250,8 +250,8 @@ public Action SkillSystemOnClientHUD(Handle hTimer, int userID)
         SkillSystemBar[clientIndex][RoundToNearest((gClientData[clientIndex].SkillCounter * BAR_MAX_LENGTH) / ClassGetSkillDuration(gClientData[clientIndex].Class))] = '\0';
 
         // Show health bar
-        VEffectsHudClientScreen(gServerData.Skill[0], clientIndex, SKILL_HUD_X, SKILL_HUD_Y, 0.11, 255, 0, 0, 255, 0, 0.0, 0.0, 0.0, SkillSystemMax);
-        VEffectsHudClientScreen(gServerData.Skill[1], clientIndex, SKILL_HUD_X, SKILL_HUD_Y, 0.11, 255, 255, 0, 255, 0, 0.0, 0.0, 0.0, SkillSystemBar[clientIndex]);
+        UTIL_CreateClientHud(gServerData.SkillSync[0], clientIndex, SKILL_HUD_X, SKILL_HUD_Y, 0.11, 255, 0, 0, 255, 0, 0.0, 0.0, 0.0, SkillSystemMax);
+        UTIL_CreateClientHud(gServerData.SkillSync[1], clientIndex, SKILL_HUD_X, SKILL_HUD_Y, 0.11, 255, 255, 0, 255, 0, 0.0, 0.0, 0.0, SkillSystemBar[clientIndex]);
 
         // Allow timer
         return Plugin_Continue;
@@ -359,13 +359,13 @@ public Action SkillSystemOnClientRegen(Handle hTimer, int userID)
         static float vVelocity[3];
         
         // Gets client velocity
-        ToolsGetClientVelocity(clientIndex, vVelocity);
+        ToolsGetVelocity(clientIndex, vVelocity);
         
         // If the client don't move, then check health
         if(!(SquareRoot(Pow(vVelocity[0], 2.0) + Pow(vVelocity[1], 2.0))))
         {
             // If restoring is available, then do it
-            int iHealth = GetClientHealth(clientIndex); // Store for next usage
+            int iHealth = ToolsGetHealth(clientIndex); // Store for next usage
             if(iHealth < ClassGetHealth(gClientData[clientIndex].Class))
             {
                 // Initialize a new health amount
@@ -378,7 +378,7 @@ public Action SkillSystemOnClientRegen(Handle hTimer, int userID)
                 }
                 
                 // Update health
-                ToolsSetClientHealth(clientIndex, iRegen);
+                ToolsSetHealth(clientIndex, iRegen);
 
                 // Forward event to modules
                 SoundsOnClientRegen(clientIndex);
@@ -386,7 +386,7 @@ public Action SkillSystemOnClientRegen(Handle hTimer, int userID)
             }
         }
 
-        // Allow counter
+        // Allow timer
         return Plugin_Continue;
     }
 

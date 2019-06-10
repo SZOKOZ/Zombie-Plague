@@ -11,11 +11,11 @@
  * 
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
  * details.
  *
  * You should have received a copy of the GNU General Public License along with
- * this program.  If not, see <http://www.gnu.org/licenses/>.
+ * this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * As a special exception, AlliedModders LLC gives you permission to link the
  * code of this program (as well as its derivative works) to "Half-Life 2," the
@@ -451,7 +451,7 @@ native bool ZP_IsGameModeExtraItem(int modeID);
  *
  * @return                  True or false.
  **/
-stock bool ZP_IsGameModeZombieClass(const int modeID, const char[] sClass)
+stock bool ZP_IsGameModeZombieClass(int modeID, char[] sClass)
 {
     // Gets zombie class type
     static char sClassType[SMALL_LINE_LENGTH];
@@ -469,7 +469,7 @@ stock bool ZP_IsGameModeZombieClass(const int modeID, const char[] sClass)
  *
  * @return                  True or false.
  **/
-stock bool ZP_IsGameModeHumanClass(const int modeID, const char[] sClass)
+stock bool ZP_IsGameModeHumanClass(int modeID, char[] sClass)
 {
     // Gets human class type
     static char sClassType[SMALL_LINE_LENGTH];

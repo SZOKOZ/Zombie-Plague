@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -42,16 +42,16 @@ public Plugin myinfo =
 }
 
 /**
- * @section Information about zombie class.
+ * @section Information about the zombie class.
  **/
 #define ZOMBIE_CLASS_SKILL_SHAKE_AMP         2.0           
 #define ZOMBIE_CLASS_SKILL_SHAKE_FREQUENCY   1.0           
 #define ZOMBIE_CLASS_SKILL_SHAKE_DURATION    3.0
 #define ZOMBIE_CLASS_SKILL_DISTANCE          60.0
 #define ZOMBIE_CLASS_SKILL_HEALTH            200
-#define ZOMBIE_CLASS_SKILL_EXP_TIME          0.1
 #define ZOMBIE_CLASS_SKILL_RADIUS            400.0
-#define ZOMBIE_CLASS_SKILL_POWER             1000.0         
+#define ZOMBIE_CLASS_SKILL_KNOCKBACK         1000.0  
+#define ZOMBIE_CLASS_SKILL_EXP_TIME          2.0
 /**
  * @endsection
  **/
@@ -116,79 +116,51 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
     if(ZP_GetClientClass(clientIndex) == gZombie)
     {
         // Initialize vectors
-        static float vFromPosition[3];
+        static float vPosition[3]; static float vAngle[3];
 
         // Gets weapon position
-        ZP_GetPlayerGunPosition(clientIndex, ZOMBIE_CLASS_SKILL_DISTANCE, _, _, vFromPosition);
-
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound), 1);
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+        ZP_GetPlayerGunPosition(clientIndex, ZOMBIE_CLASS_SKILL_DISTANCE, _, _, vPosition);
+        GetClientEyeAngles(clientIndex, vAngle); vAngle[0] = vAngle[2] = 0.0; /// Only pitch
         
-        // Create a trap entity
-        int entityIndex = CreateEntityByName("prop_physics_multiplayer"); 
-
-        // Validate entity
-        if(entityIndex != INVALID_ENT_REFERENCE)
+        // Initialize the hull intersection
+        static const float vMins[3] = { -3.077446, -9.829969, -37.660713 }; 
+        static const float vMaxs[3] = { 11.564661, 20.737569, 38.451633  }; 
+        
+        // Create the hull trace
+        vPosition[2] += vMaxs[2] / 2; /// Move center of hull upward
+        TR_TraceHull(vPosition, vPosition, vMins, vMaxs, MASK_SOLID);
+        
+        // Validate no collisions
+        if(!TR_DidHit())
         {
-            // Dispatch main values of the entity
-            DispatchKeyValue(entityIndex, "model", "models/player/custom_player/zombie/zombiepile/zombiepile.mdl");
-            DispatchKeyValue(entityIndex, "spawnflags", "8832"); /// Not affected by rotor wash | Prevent pickup | Force server-side
+            // Create a physics entity
+            int entityIndex = UTIL_CreatePhysics("coffin", vPosition, vAngle, "models/player/custom_player/zombie/zombiepile/zombiepile.mdl", PHYS_FORCESERVERSIDE | PHYS_MOTIONDISABLED | PHYS_NOTAFFECTBYROTOR);
 
-            // Spawn the entity
-            DispatchSpawn(entityIndex);
-
-            // Teleport the coffin
-            TeleportEntity(entityIndex, vFromPosition, NULL_VECTOR, NULL_VECTOR);
-
-            // Sets physics
-            SetEntProp(entityIndex, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PLAYER);
-            SetEntProp(entityIndex, Prop_Data, "m_nSolidType", SOLID_VPHYSICS);
-            
-            // Sets owner to the entity
-            SetEntPropEnt(entityIndex, Prop_Data, "m_pParent", clientIndex);
-
-            // Sets health
-            SetEntProp(entityIndex, Prop_Data, "m_takedamage", DAMAGE_EVENTS_ONLY);
-            SetEntProp(entityIndex, Prop_Data, "m_iHealth", ZOMBIE_CLASS_SKILL_HEALTH);
-            SetEntProp(entityIndex, Prop_Data, "m_iMaxHealth", ZOMBIE_CLASS_SKILL_HEALTH);
-
-            // Create damage/touch hook
-            SDKHook(entityIndex, SDKHook_Touch, CoffinTouchHook);
-            SDKHook(entityIndex, SDKHook_OnTakeDamage, CoffinDamageHook);
-            
-            // Create remove timer
-            CreateTimer(ZP_GetClassSkillDuration(gZombie), CoffinExploadHook, EntIndexToEntRef(entityIndex), TIMER_FLAG_NO_MAPCHANGE);
-        }
-    }
-    
-    // Allow usage
-    return Plugin_Continue;
-}
-
-/**
- * @brief Coffin touch hook.
- * 
- * @param entityIndex       The entity index.        
- * @param targetIndex       The target index.               
- **/
-public Action CoffinTouchHook(int entityIndex, int targetIndex)
-{
-    // Validate entity
-    if(IsValidEdict(entityIndex))
-    {
-        // Validate target
-        if(IsPlayerExist(targetIndex))
-        {
-            // Expload with other player coliding
-            if(GetEntPropEnt(entityIndex, Prop_Data, "m_pParent") != targetIndex)
+            // Validate entity
+            if(entityIndex != INVALID_ENT_REFERENCE)
             {
-                // Destroy touch hook
-                SDKUnhook(entityIndex, SDKHook_Touch, CoffinTouchHook);
-        
-                // Expload it
-                CoffinExpload(entityIndex);
+                // Sets physics
+                SetEntProp(entityIndex, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PLAYER);
+                SetEntProp(entityIndex, Prop_Data, "m_nSolidType", SOLID_VPHYSICS);
+                
+                // Sets owner to the entity
+                SetEntPropEnt(entityIndex, Prop_Data, "m_pParent", clientIndex);
+
+                #if ZOMBIE_CLASS_SKILL_HEALTH > 0
+                // Sets health
+                SetEntProp(entityIndex, Prop_Data, "m_takedamage", DAMAGE_EVENTS_ONLY);
+                SetEntProp(entityIndex, Prop_Data, "m_iHealth", ZOMBIE_CLASS_SKILL_HEALTH);
+                SetEntProp(entityIndex, Prop_Data, "m_iMaxHealth", ZOMBIE_CLASS_SKILL_HEALTH);
+
+                // Create damage hook
+                SDKHook(entityIndex, SDKHook_OnTakeDamage, CoffinDamageHook);
+                #endif
+                
+                // Play sound
+                ZP_EmitSoundToAll(gSound, 1, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+                
+                // Create remove timer
+                CreateTimer(ZP_GetClassSkillDuration(gZombie), CoffinExploadHook, EntIndexToEntRef(entityIndex), TIMER_FLAG_NO_MAPCHANGE);
             }
         }
     }
@@ -208,31 +180,25 @@ public Action CoffinTouchHook(int entityIndex, int targetIndex)
  **/
 public Action CoffinDamageHook(int entityIndex, int &attackerIndex, int &inflictorIndex, float &flDamage, int &iBits)
 {
-    // Validate entity
-    if(IsValidEdict(entityIndex))
-    {
-        // Calculate the damage
-        int iHealth = GetEntProp(entityIndex, Prop_Data, "m_iHealth") - RoundToNearest(flDamage); iHealth = (iHealth > 0) ? iHealth : 0;
+    // Calculate the damage
+    int iHealth = GetEntProp(entityIndex, Prop_Data, "m_iHealth") - RoundToNearest(flDamage); iHealth = (iHealth > 0) ? iHealth : 0;
 
-        // Destroy entity
-        if(!iHealth)
-        {
-            // Destroy damage hook
-            SDKUnhook(entityIndex, SDKHook_OnTakeDamage, CoffinDamageHook);
-    
-            // Expload it
-            CoffinExpload(entityIndex);
-        }
-        else
-        {
-            // Emit sound
-            static char sSound[PLATFORM_LINE_LENGTH];
-            ZP_GetSound(gSound, sSound, sizeof(sSound), GetRandomInt(2, 3));
-            EmitSoundToAll(sSound, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
-            
-            // Apply damage
-            SetEntProp(entityIndex, Prop_Data, "m_iHealth", iHealth);
-        }
+    // Destroy entity
+    if(!iHealth)
+    {
+        // Destroy damage hook
+        SDKUnhook(entityIndex, SDKHook_OnTakeDamage, CoffinDamageHook);
+
+        // Expload it
+        CoffinExpload(entityIndex);
+    }
+    else
+    {
+        // Play sound
+        ZP_EmitSoundToAll(gSound, GetRandomInt(2, 3), entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+        
+        // Apply damage
+        SetEntProp(entityIndex, Prop_Data, "m_iHealth", iHealth);
     }
 
     // Return on success
@@ -266,110 +232,49 @@ public Action CoffinExploadHook(Handle hTimer, int referenceIndex)
 void CoffinExpload(int entityIndex)
 {
     // Initialize vectors
-    static float vEntPosition[3]; static float vEntAngle[3]; static float vVictimPosition[3]; static float vVelocity[3]; static float vAngle[3];
+    static float vEntPosition[3]; static float vVictimPosition[3]; static float vGibAngle[3]; float vShootAngle[3];
 
     // Gets entity position
-    GetEntPropVector(entityIndex, Prop_Send, "m_vecOrigin", vEntPosition);
+    GetEntPropVector(entityIndex, Prop_Data, "m_vecAbsOrigin", vEntPosition);
 
-    // i = client index
-    for(int i = 1; i <= MaxClients; i++)
+    // Find any players in the radius
+    int i; int it = 1; /// iterator
+    while((i = ZP_FindPlayerInSphere(it, vEntPosition, ZOMBIE_CLASS_SKILL_RADIUS)) != INVALID_ENT_REFERENCE)
     {
-        // Validate human
-        if(IsPlayerExist(i) && ZP_IsPlayerZombie(i))
-        {
-            // Gets victim origin
-            GetClientAbsOrigin(i, vVictimPosition);
-            
-            // Calculate the distance
-            float flDistance = GetVectorDistance(vEntPosition, vVictimPosition);
-            
-            // Validate distance
-            if(flDistance <= ZOMBIE_CLASS_SKILL_RADIUS)
-            {                
-                // Calculate the velocity vector
-                SubtractVectors(vVictimPosition, vEntPosition, vVelocity);
-                
-                // Create a knockback
-                ZP_CreateRadiusKnockBack(i, vVelocity, flDistance, ZOMBIE_CLASS_SKILL_POWER, ZOMBIE_CLASS_SKILL_RADIUS);
-                
-                // Create a shake
-                ZP_CreateShakeScreen(i, ZOMBIE_CLASS_SKILL_SHAKE_AMP, ZOMBIE_CLASS_SKILL_SHAKE_FREQUENCY, ZOMBIE_CLASS_SKILL_SHAKE_DURATION);
-            }
-        }
+        // Gets victim origin
+        GetEntPropVector(i, Prop_Data, "m_vecAbsOrigin", vVictimPosition);
+
+        // Create a knockback
+        UTIL_CreatePhysForce(i, vEntPosition, vVictimPosition, GetVectorDistance(vEntPosition, vVictimPosition), ZOMBIE_CLASS_SKILL_KNOCKBACK, ZOMBIE_CLASS_SKILL_RADIUS);
+        
+        // Create a shake
+        UTIL_CreateShakeScreen(i, ZOMBIE_CLASS_SKILL_SHAKE_AMP, ZOMBIE_CLASS_SKILL_SHAKE_FREQUENCY, ZOMBIE_CLASS_SKILL_SHAKE_DURATION);
     }
     
     // Create an explosion effect
-    ZP_CreateParticle(entityIndex, vEntPosition, _, "explosion_hegrenade_dirt", ZOMBIE_CLASS_SKILL_EXP_TIME);
+    UTIL_CreateParticle(entityIndex, vEntPosition, _, _, "explosion_hegrenade_dirt", ZOMBIE_CLASS_SKILL_EXP_TIME);
 
-    // Emit sound
-    static char sSound[PLATFORM_LINE_LENGTH];
-    ZP_GetSound(gSound, sSound, sizeof(sSound), 4);
-    EmitSoundToAll(sSound, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+    // Play sound
+    ZP_EmitSoundToAll(gSound, 4, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
     
-    // Create a breaked glass effect
-    static char sModel[NORMAL_LINE_LENGTH];
+    // Create a breaked metal effect
+    static char sBuffer[NORMAL_LINE_LENGTH];
     for(int x = 0; x <= 4; x++)
     {
         // Find gib positions
-        vAngle[1] += 72.0; vEntAngle[0] = GetRandomFloat(0.0, 360.0); vEntAngle[1] = GetRandomFloat(-15.0, 15.0); vEntAngle[2] = GetRandomFloat(-15.0, 15.0); switch(x)
+        vShootAngle[1] += 72.0; vGibAngle[0] = GetRandomFloat(0.0, 360.0); vGibAngle[1] = GetRandomFloat(-15.0, 15.0); vGibAngle[2] = GetRandomFloat(-15.0, 15.0); switch(x)
         {
-            case 0 : strcopy(sModel, sizeof(sModel), "models/gibs/metal_gib1.mdl");
-            case 1 : strcopy(sModel, sizeof(sModel), "models/gibs/metal_gib2.mdl");
-            case 2 : strcopy(sModel, sizeof(sModel), "models/gibs/metal_gib3.mdl");
-            case 3 : strcopy(sModel, sizeof(sModel), "models/gibs/metal_gib4.mdl");
-            case 4 : strcopy(sModel, sizeof(sModel), "models/gibs/metal_gib5.mdl");
+            case 0 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/metal_gib1.mdl");
+            case 1 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/metal_gib2.mdl");
+            case 2 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/metal_gib3.mdl");
+            case 3 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/metal_gib4.mdl");
+            case 4 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/metal_gib5.mdl");
         }
     
-        // Create a shooter entity
-        int gibIndex = CreateEntityByName("env_shooter");
-
-        // If entity isn't valid, then skip
-        if(gibIndex != INVALID_ENT_REFERENCE)
-        {
-            // Dispatch main values of the entity
-            DispatchKeyValueVector(gibIndex, "angles", vAngle);
-            DispatchKeyValueVector(gibIndex, "gibangles", vEntAngle);
-            DispatchKeyValue(gibIndex, "rendermode", "5");
-            DispatchKeyValue(gibIndex, "shootsounds", "2");
-            DispatchKeyValue(gibIndex, "shootmodel", sModel);
-            DispatchKeyValueFloat(gibIndex, "m_iGibs", METAL_GIBS_AMOUNT);
-            DispatchKeyValueFloat(gibIndex, "delay", METAL_GIBS_DELAY);
-            DispatchKeyValueFloat(gibIndex, "m_flVelocity", METAL_GIBS_SPEED);
-            DispatchKeyValueFloat(gibIndex, "m_flVariance", METAL_GIBS_VARIENCE);
-            DispatchKeyValueFloat(gibIndex, "m_flGibLife", METAL_GIBS_LIFE);
-
-            // Spawn the entity into the world
-            DispatchSpawn(gibIndex);
-
-            // Activate the entity
-            ActivateEntity(gibIndex);  
-            AcceptEntityInput(gibIndex, "Shoot");
-
-            // Sets parent to the client
-            SetVariantString("!activator"); 
-            AcceptEntityInput(gibIndex, "SetParent", entityIndex, gibIndex); 
-
-            // Sets attachment to the client
-            SetVariantString("1"); /// Attachment name in the coffin model
-            AcceptEntityInput(gibIndex, "SetParentAttachment", entityIndex, gibIndex);
-
-            // Initialize time char
-            static char sTime[SMALL_LINE_LENGTH];
-            FormatEx(sTime, sizeof(sTime), "OnUser1 !self:kill::%f:1", METAL_GIBS_DURATION);
-
-            // Sets modified flags on the entity
-            SetVariantString(sTime);
-            AcceptEntityInput(gibIndex, "AddOutput");
-            AcceptEntityInput(gibIndex, "FireUser1");
-        }
+        // Create gibs
+        UTIL_CreateShooter(entityIndex, "1", _, MAT_METAL, sBuffer, vShootAngle, vGibAngle, METAL_GIBS_AMOUNT, METAL_GIBS_DELAY, METAL_GIBS_SPEED, METAL_GIBS_VARIENCE, METAL_GIBS_LIFE, METAL_GIBS_DURATION);
     }
 
-    // Initialize time char
-    static char sTime[SMALL_LINE_LENGTH];
-    FormatEx(sTime, sizeof(sTime), "OnUser1 !self:kill::%f:1", ZOMBIE_CLASS_SKILL_EXP_TIME);
-
-    // Sets modified flags on the entity
-    SetVariantString(sTime);
-    AcceptEntityInput(entityIndex, "AddOutput");
-    AcceptEntityInput(entityIndex, "FireUser1");
+    // Kill after some duration
+    UTIL_RemoveEntity(entityIndex, 0.1);
 }

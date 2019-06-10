@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -41,7 +41,7 @@
 }
 
 /**
- * @section Information about zombie class.
+ * @section Information about the zombie class.
  **/
 #define ZOMBIE_CLASS_SKILL_CHANCE_CAST  20
 #define ZOMBIE_CLASS_SKILL_DURATION_F   3.3
@@ -107,18 +107,16 @@ public void ZP_OnClientDamaged(int clientIndex, int &attackerIndex, int &inflict
         // Validate chance
         if(nChanceIndex[clientIndex] < ZOMBIE_CLASS_SKILL_CHANCE_CAST)
         {
-            // Emit sound
-            static char sSound[PLATFORM_LINE_LENGTH];
-            ZP_GetSound(gSound, sSound, sizeof(sSound), 1);
-            EmitSoundToAll(sSound, attackerIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+            // Play sound
+            ZP_EmitSoundToAll(gSound, 1, attackerIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
             
             // Create an fade
-            ZP_CreateFadeScreen(attackerIndex, ZOMBIE_CLASS_SKILL_DURATION_F, ZOMBIE_CLASS_SKILL_TIME_F, 0x0001, ZOMBIE_CLASS_SKILL_COLOR_F);
+            UTIL_CreateFadeScreen(attackerIndex, ZOMBIE_CLASS_SKILL_DURATION_F, ZOMBIE_CLASS_SKILL_TIME_F, 0x0001, ZOMBIE_CLASS_SKILL_COLOR_F);
             
             // Create effect
-            static float vAttackerPosition[3];
-            GetClientAbsOrigin(attackerIndex, vAttackerPosition);
-            ZP_CreateParticle(attackerIndex, vAttackerPosition, _, "sila_trail_apalaal", ZOMBIE_CLASS_SKILL_DURATION_F);
+            static float vPosition[3];
+            GetEntPropVector(attackerIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
+            UTIL_CreateParticle(attackerIndex, vPosition, _, _, "sila_trail_apalaal", ZOMBIE_CLASS_SKILL_DURATION_F);
         }
     }
 }

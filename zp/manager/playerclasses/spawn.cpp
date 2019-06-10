@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -71,11 +71,11 @@ void SpawnOnCacheData(char[] sClassname)
     while((entityIndex = FindEntityByClassname(entityIndex, sClassname)) != INVALID_ENT_REFERENCE)
     {
         // Gets the origin position
-        static float vOrigin[3];
-        ToolsGetEntityOrigin(entityIndex, vOrigin); 
+        static float vPosition[3];
+        ToolsGetAbsOrigin(entityIndex, vPosition); 
         
         // Push data into array 
-        gServerData.Spawns.PushArray(vOrigin, sizeof(vOrigin));
+        gServerData.Spawns.PushArray(vPosition, sizeof(vPosition));
     }
 }
 
@@ -116,7 +116,7 @@ public Action SpawnOnCommandListened(int clientIndex, char[] commandMsg, int iAr
         int iTeam = StringToInt(sArg);
 
         // Gets current team
-        switch(GetClientTeam(clientIndex))
+        switch(ToolsGetTeam(clientIndex))
         {
             case TEAM_NONE :
             {
@@ -130,7 +130,7 @@ public Action SpawnOnCommandListened(int clientIndex, char[] commandMsg, int iAr
                         if(iDelay > gCvarList[CVAR_GAMEMODE_ROUNDTIME_ZP].IntValue || gServerData.RoundMode == -1)
                         {
                             // Switch team
-                            ToolsSetClientTeam(clientIndex, !(clientIndex % 2) ? TEAM_HUMAN : TEAM_ZOMBIE);
+                            ToolsSetTeam(clientIndex, (clientIndex & 1) ? TEAM_ZOMBIE : TEAM_HUMAN);
                             
                             // If game round didn't start, then respawn
                             if(gServerData.RoundMode == -1)
@@ -172,7 +172,7 @@ public Action SpawnOnCommandListened(int clientIndex, char[] commandMsg, int iAr
                         if(gServerData.RoundMode == -1)
                         {
                             // Switch team
-                            ToolsSetClientTeam(clientIndex, !(clientIndex % 2) ? TEAM_HUMAN : TEAM_ZOMBIE);
+                            ToolsSetTeam(clientIndex, (clientIndex & 1) ? TEAM_ZOMBIE : TEAM_HUMAN);
                             
                             // Force client to respawn
                             ToolsForceToRespawn(clientIndex);
@@ -206,9 +206,10 @@ public Action SpawnOnCommandListened(int clientIndex, char[] commandMsg, int iAr
         }
         
         // Forward event to modules
-        LevelSystemOnClientSpawn(clientIndex);
         AccountOnClientSpawn(clientIndex);
+        LevelSystemOnClientSpawn(clientIndex);
         VOverlayOnClientSpawn(clientIndex);
+        VEffectOnClientSpawn(clientIndex);
     }
     
     // Allow command
@@ -241,9 +242,9 @@ public Action SpawnOnClientSpawn(Event hEvent, char[] sName, bool dontBroadcast)
 /**
  * @brief Gets the random spawn position.
  * 
- * @param vOrigin           The origin output.
+ * @param vPosition         The origin output.
  **/
-void SpawnGetRandomPosition(float vOrigin[3])
+void SpawnGetRandomPosition(float vPosition[3])
 {
     // Validate lenght
     int iSize = gServerData.Spawns.Length;
@@ -254,5 +255,5 @@ void SpawnGetRandomPosition(float vOrigin[3])
     }
     
     // Gets random array
-    gServerData.Spawns.GetArray(GetRandomInt(0, iSize - 1), vOrigin, sizeof(vOrigin));
+    gServerData.Spawns.GetArray(GetRandomInt(0, iSize - 1), vPosition, sizeof(vPosition));
 }

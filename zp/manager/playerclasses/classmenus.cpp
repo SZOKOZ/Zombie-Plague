@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -172,7 +172,7 @@ int ClassValidateIndex(int clientIndex, char[] sType)
     ClassGetType(gClientData[clientIndex].Class, sClassType, sizeof(sClassType));
     
     // Find any accessable class 
-    if((hasLength(sClassGroup) && !IsPlayerInGroup(clientIndex, sClassGroup)) || ClassGetLevel(gClientData[clientIndex].Class) > gClientData[clientIndex].Level || strcmp(sClassType, sType))
+    if((hasLength(sClassGroup) && !IsPlayerInGroup(clientIndex, sClassGroup)) || ClassGetLevel(gClientData[clientIndex].Class) > gClientData[clientIndex].Level || strcmp(sClassType, sType, false))
     {
         // Choose any accessable class
         for(int i = 0; i < iSize; i++)
@@ -186,7 +186,7 @@ int ClassValidateIndex(int clientIndex, char[] sType)
             
             // Skip some classes, if types isn't equal
             ClassGetType(i, sClassType, sizeof(sClassType));
-            if(strcmp(sClassType, sType))
+            if(strcmp(sClassType, sType, false))
             {
                 continue;
             }
@@ -237,7 +237,7 @@ void ClassMenu(int clientIndex, char[] sTitle, char[] sType, int iClass, bool bI
     static char sGroup[SMALL_LINE_LENGTH];
 
     // Creates menu handle
-    Menu hMenu = CreateMenu((!strcmp(sType, "zombie")) ? (bInstant ? ClassZombieMenuSlots2 : ClassZombieMenuSlots1) : (bInstant ? ClassHumanMenuSlots2 : ClassHumanMenuSlots1));
+    Menu hMenu = CreateMenu((!strcmp(sType, "zombie", false)) ? (bInstant ? ClassZombieMenuSlots2 : ClassZombieMenuSlots1) : (bInstant ? ClassHumanMenuSlots2 : ClassHumanMenuSlots1));
 
     // Sets language to target
     SetGlobalTransTarget(clientIndex);
@@ -246,7 +246,7 @@ void ClassMenu(int clientIndex, char[] sTitle, char[] sType, int iClass, bool bI
     hMenu.SetTitle("%t", sTitle);
     
     // Initialize forward
-    static Action resultHandle;
+    Action resultHandle;
     
     // i = class index
     int iSize = gServerData.Classes.Length;
@@ -265,7 +265,7 @@ void ClassMenu(int clientIndex, char[] sTitle, char[] sType, int iClass, bool bI
         ClassGetType(i, sName, sizeof(sName));
         
         // Skip some classes, if types isn't equal
-        if(strcmp(sName, sType))
+        if(strcmp(sName, sType, false))
         {
             continue;
         }
@@ -396,25 +396,23 @@ void ClassMenuSlots(Menu hMenu, MenuAction mAction, char[] sCommand, int clientI
                 return;
             }
 
-            // Initialize name char
-            static char sClassName[SMALL_LINE_LENGTH];
-
             // Gets menu info
-            hMenu.GetItem(mSlot, sClassName, sizeof(sClassName));
-            int iD = StringToInt(sClassName);
+            static char sBuffer[SMALL_LINE_LENGTH];
+            hMenu.GetItem(mSlot, sBuffer, sizeof(sBuffer));
+            int iD = StringToInt(sBuffer);
             
             // Call forward
-            static Action resultHandle;
+            Action resultHandle;
             gForwardData._OnClientValidateClass(clientIndex, iD, resultHandle);
 
             // Validate handle
             if(resultHandle == Plugin_Continue || resultHandle == Plugin_Changed)
             {
                 // Gets class type
-                ClassGetType(iD, sClassName, sizeof(sClassName));
+                ClassGetType(iD, sBuffer, sizeof(sBuffer));
                 
                 // Validate human
-                if(!strcmp(sClassName, "human", false))
+                if(!strcmp(sBuffer, "human", false))
                 {
                     // Sets next human class
                     gClientData[clientIndex].HumanClassNext = iD;
@@ -430,7 +428,7 @@ void ClassMenuSlots(Menu hMenu, MenuAction mAction, char[] sCommand, int clientI
                     }
                 }
                 // Validate zombie
-                else if(!strcmp(sClassName, "zombie", false))
+                else if(!strcmp(sBuffer, "zombie", false))
                 {
                     // Sets next zombie class
                     gClientData[clientIndex].ZombieClassNext = iD;
@@ -453,10 +451,10 @@ void ClassMenuSlots(Menu hMenu, MenuAction mAction, char[] sCommand, int clientI
                 }
                 
                 // Gets class name
-                ClassGetName(iD, sClassName, sizeof(sClassName));
+                ClassGetName(iD, sBuffer, sizeof(sBuffer));
                 
                 // If help messages enabled, then show info
-                if(gCvarList[CVAR_MESSAGES_HELP].BoolValue) TranslationPrintToChat(clientIndex, "class info", sClassName, ClassGetHealth(iD), ClassGetArmor(iD), ClassGetSpeed(iD));
+                if(gCvarList[CVAR_MESSAGES_CLASS_CHOOSE].BoolValue) TranslationPrintToChat(clientIndex, "class info", sBuffer, ClassGetHealth(iD), ClassGetArmor(iD), ClassGetSpeed(iD));
             }
         }
     }
@@ -528,7 +526,7 @@ void ClassesMenu(int clientIndex)
     if(!iCount)
     {
         // Format some chars for showing in menu
-        Format(sBuffer, sizeof(sBuffer), "%t", "empty");
+        FormatEx(sBuffer, sizeof(sBuffer), "%t", "empty");
         hMenu.AddItem("empty", sBuffer, ITEMDRAW_DISABLED);
     }
     
@@ -589,13 +587,11 @@ public int ClassesMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int
                 ClientCommand(clientIndex, "play buttons/button11.wav");    
                 return;
             }
-            
-            // Initialize key char
-            static char sKey[SMALL_LINE_LENGTH];
 
             // Gets menu info
-            hMenu.GetItem(mSlot, sKey, sizeof(sKey));
-            int targetIndex = StringToInt(sKey);
+            static char sBuffer[SMALL_LINE_LENGTH];
+            hMenu.GetItem(mSlot, sBuffer, sizeof(sBuffer));
+            int targetIndex = StringToInt(sBuffer);
             
             // Validate target
             if(IsPlayerExist(targetIndex, false))
@@ -669,7 +665,7 @@ void ClassesOptionMenu(int clientIndex, int targetIndex)
     if(!iSize)
     {
         // Format some chars for showing in menu
-        Format(sBuffer, sizeof(sBuffer), "%t", "empty");
+        FormatEx(sBuffer, sizeof(sBuffer), "%t", "empty");
         hMenu.AddItem("empty", sBuffer, ITEMDRAW_DISABLED);
     }
     
@@ -729,14 +725,12 @@ public int ClassesListMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex,
                 ClientCommand(clientIndex, "play buttons/button11.wav");    
                 return;
             }
-            
-            // Initialize type char
-            static char sClassType[SMALL_LINE_LENGTH];
-        
+
             // Gets menu info
-            hMenu.GetItem(mSlot, sClassType, sizeof(sClassType));
+            static char sBuffer[SMALL_LINE_LENGTH];
+            hMenu.GetItem(mSlot, sBuffer, sizeof(sBuffer));
             static char sInfo[2][SMALL_LINE_LENGTH];
-            ExplodeString(sClassType, ":", sInfo, sizeof(sInfo), sizeof(sInfo[]));
+            ExplodeString(sBuffer, ":", sInfo, sizeof(sInfo), sizeof(sInfo[]));
             int targetIndex = StringToInt(sInfo[1]);
 
             // Validate target

@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -42,7 +42,7 @@ public Plugin myinfo =
 }
 
 /**
- * @section Information about zombie class.
+ * @section Information about the zombie class.
  **/
 #define ZOMBIE_CLASS_SKILL_REWARD       10 // For each human
 /**
@@ -69,9 +69,6 @@ public void OnLibraryAdded(const char[] sLibrary)
     // Validate library
     if(!strcmp(sLibrary, "zombieplague", false))
     {
-        // Hook player events
-        HookEvent("player_death", EventPlayerDeath, EventHookMode_Pre);
-        
         // Load translations phrases used by plugin
         LoadTranslations("zombieplague.phrases");
     }
@@ -120,17 +117,15 @@ public void OnClientDisconnect(int clientIndex)
 }
 
 /**
- * Event callback (player_death)
- * @brief Client has been killed.
+ * @brief Called when a client has been killed.
  * 
- * @param gEventHook        The event handle.
- * @param gEventName        The name of the event.
- * @param dontBroadcast     If true, event is broadcasted to all clients, false if not.
+ * @param clientIndex       The client index.
+ * @param attackerIndex     The attacker index.
  **/
-public Action EventPlayerDeath(Event hEvent, char[] sName, bool dontBroadcast) 
+public void ZP_OnClientDeath(int clientIndex, int attackerIndex)
 {
     // Delete timer
-    delete Task_HumanTrapped[GetClientOfUserId(hEvent.GetInt("userid"))];
+    delete Task_HumanTrapped[clientIndex];
 }
 
 /**
@@ -188,68 +183,51 @@ public void ZP_OnClientSkillOver(int clientIndex)
     if(ZP_GetClientClass(clientIndex) == gZombie)
     {
         // Initialize vectors
-        static float vPosition[3];
+        static float vPosition[3]; static float vAngle[3];
         
-        // Gets client position
-        GetClientAbsOrigin(clientIndex, vPosition);
-        
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound), 1);
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
-        
-        // Create a trap entity
-        int entityIndex = CreateEntityByName("prop_physics_multiplayer"); 
+        // Gets client position/angles
+        GetEntPropVector(clientIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
+        GetClientEyeAngles(clientIndex, vAngle); vAngle[0] = vAngle[2] = 0.0; /// Only pitch
+
+        // Create a physics entity
+        int entityIndex = UTIL_CreatePhysics("trap", vPosition, vAngle, "models/player/custom_player/zombie/ice/ice.mdl", PHYS_FORCESERVERSIDE | PHYS_MOTIONDISABLED | PHYS_NOTAFFECTBYROTOR);
 
         // Validate entity
         if(entityIndex != INVALID_ENT_REFERENCE)
         {
-            // Dispatch main values of the entity
-            DispatchKeyValue(entityIndex, "model", "models/player/custom_player/zombie/ice/ice.mdl");
-            DispatchKeyValue(entityIndex, "spawnflags", "8834"); /// Don't take physics damage | Not affected by rotor wash | Prevent pickup | Force server-side
-            
-            // Spawn the entity
-            DispatchSpawn(entityIndex);
-            
-            // Teleport the trap
-            TeleportEntity(entityIndex, vPosition, NULL_VECTOR, NULL_VECTOR);
-            
             // Sets physics
             SetEntProp(entityIndex, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PLAYER);
-            SetEntProp(entityIndex, Prop_Send, "m_usSolidFlags", FSOLID_NOT_SOLID|FSOLID_TRIGGER); 
+            SetEntProp(entityIndex, Prop_Send, "m_usSolidFlags", FSOLID_NOT_SOLID|FSOLID_TRIGGER); /// Make trigger
             SetEntProp(entityIndex, Prop_Data, "m_nSolidType", SOLID_VPHYSICS);
-            SetEntityMoveType(entityIndex, MOVETYPE_NONE);
 
             // Create a prop_dynamic entity
-            int trapIndex = CreateEntityByName("prop_dynamic");
-
+            int trapIndex = UTIL_CreateDynamic("trap", vPosition, vAngle, "models/player/custom_player/zombie/zombie_trap/trap.mdl", "idle", false);
+            
             // Validate entity
             if(trapIndex != INVALID_ENT_REFERENCE)
             {
-                // Dispatch main values of the entity
-                DispatchKeyValue(trapIndex, "model", "models/player/custom_player/zombie/zombie_trap/trap.mdl");
-                DispatchKeyValue(trapIndex, "DefaultAnim", "idle");
-                DispatchKeyValue(trapIndex, "spawnflags", "256"); /// Start with collision disabled
-                DispatchKeyValue(trapIndex, "solid", "0");
+                // Sets parent to the entity
+                SetVariantString("!activator");
+                AcceptEntityInput(trapIndex, "SetParent", entityIndex, trapIndex);
+
+                // Sets owner to the entity
+                SetEntPropEnt(entityIndex, Prop_Send, "m_hOwnerEntity", trapIndex); /// Store for animating
                 
-                // Spawn the entity
-                DispatchSpawn(trapIndex);
-
                 // Create transmit hook
-                SDKHook(trapIndex, SDKHook_SetTransmit, TrapOnTransmit);
-
-                // Spawn the fake trap
-                TeleportEntity(trapIndex, vPosition, NULL_VECTOR, NULL_VECTOR);
+                SDKHook(trapIndex, SDKHook_SetTransmit, TrapTransmitHook);
             }
             
-            // Sets parent for the entity
+            // Sets owner to the entity
             SetEntPropEnt(entityIndex, Prop_Data, "m_pParent", clientIndex); 
-            SetEntPropEnt(entityIndex, Prop_Data, "m_hMoveChild", trapIndex);
 
             // Sets an entity color
             SetEntityRenderMode(entityIndex, RENDER_TRANSALPHA); 
             SetEntityRenderColor(entityIndex, _, _, _, 0); 
-
+            AcceptEntityInput(entityIndex, "DisableShadow"); /// Prevents the entity from receiving shadows
+            
+            // Play sound
+            ZP_EmitSoundToAll(gSound, 1, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+            
             // Create touch hook
             SDKHook(entityIndex, SDKHook_Touch, TrapTouchHook);
         }
@@ -268,87 +246,73 @@ public void ZP_OnClientSkillOver(int clientIndex)
  **/
 public Action TrapTouchHook(int entityIndex, int targetIndex)
 {
-    // Validate entity
-    if(IsValidEdict(entityIndex))
+    // Validate target
+    if(IsPlayerExist(targetIndex))
     {
-        // Validate target
-        if(IsPlayerExist(targetIndex))
+        // Validate human
+        if(ZP_IsPlayerHuman(targetIndex) && GetEntityMoveType(targetIndex) != MOVETYPE_NONE)
         {
-            // Validate human
-            if(ZP_IsPlayerHuman(targetIndex) && GetEntityMoveType(targetIndex) != MOVETYPE_NONE)
-            {
-                // Initialize vectors
-                static float vPosition[3];
+            // Initialize vectors
+            static float vPosition[3]; static float vAngle[3];
 
-                // Gets victim origin
-                GetClientAbsOrigin(targetIndex, vPosition);
-                
-                // Trap the client
-                SetEntityMoveType(targetIndex, MOVETYPE_NONE);
-
-                // Create timer for removing freezing
-                delete Task_HumanTrapped[targetIndex];
-                Task_HumanTrapped[targetIndex] = CreateTimer(ZP_GetClassSkillDuration(gZombie), ClientRemoveTrapEffect, GetClientUserId(targetIndex), TIMER_FLAG_NO_MAPCHANGE);
-
-                // Emit sound
-                static char sSound[PLATFORM_LINE_LENGTH];
-                ZP_GetSound(gSound, sSound, sizeof(sSound), 2);
-                EmitSoundToAll(sSound, targetIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
-
-                // Remove entity from world
-                AcceptEntityInput(entityIndex, "Kill");
-
-                // Show message
-                SetGlobalTransTarget(targetIndex);
-                PrintHintText(targetIndex, "%t", "mutationheavy catch");
-                
-                // Gets owner index
-                int ownerIndex = GetEntPropEnt(entityIndex, Prop_Data, "m_pParent");
-
-                // Validate owner
-                if(IsPlayerExist(ownerIndex))
-                {
-                    // Gets target name
-                    static char sName[NORMAL_LINE_LENGTH];
-                    GetClientName(targetIndex, sName, sizeof(sName));
+            // Gets victim origin/angle
+            GetEntPropVector(targetIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
+            GetEntPropVector(entityIndex, Prop_Data, "m_angAbsRotation", vAngle);
             
-                    // Show message
-                    SetGlobalTransTarget(ownerIndex);
-                    PrintHintText(ownerIndex, "%t", "mutationheavy catched", sName);
-                    
-                    // Give reward
-                    ZP_SetClientMoney(ownerIndex, ZP_GetClientMoney(ownerIndex) + ZOMBIE_CLASS_SKILL_REWARD);
-                }
+            // Teleport the entity
+            TeleportEntity(entityIndex, vPosition, vAngle, NULL_VECTOR);
 
-                // Create a prop_dynamic entity
-                int trapIndex = CreateEntityByName("prop_dynamic");
+            // Trap the client
+            SetEntityMoveType(targetIndex, MOVETYPE_NONE);
 
-                // Validate entity
-                if(trapIndex != INVALID_ENT_REFERENCE)
-                {
-                    // Dispatch main values of the entity
-                    DispatchKeyValue(trapIndex, "model", "models/player/custom_player/zombie/zombie_trap/trap.mdl");
-                    DispatchKeyValue(trapIndex, "DefaultAnim", "trap");
-                    DispatchKeyValue(trapIndex, "spawnflags", "256"); /// Start with collision disabled
-                    DispatchKeyValue(trapIndex, "solid", "0");
+            // Create timer for removing freezing
+            delete Task_HumanTrapped[targetIndex];
+            Task_HumanTrapped[targetIndex] = CreateTimer(ZP_GetClassSkillDuration(gZombie), ClientRemoveTrapEffect, GetClientUserId(targetIndex), TIMER_FLAG_NO_MAPCHANGE);
 
-                    // Spawn the entity
-                    DispatchSpawn(trapIndex);
-                    TeleportEntity(trapIndex, vPosition, NULL_VECTOR, NULL_VECTOR);
+            // Play sound
+            ZP_EmitSoundToAll(gSound, 2, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
 
-                    // Initialize time char
-                    static char sTime[SMALL_LINE_LENGTH];
-                    FormatEx(sTime, sizeof(sTime), "OnUser1 !self:kill::%f:1", ZP_GetClassSkillDuration(gZombie));
+            // Show message
+            SetGlobalTransTarget(targetIndex);
+            PrintHintText(targetIndex, "%t", "mutationheavy catch");
+            
+            // Gets owner index
+            int ownerIndex = GetEntPropEnt(entityIndex, Prop_Data, "m_pParent");
 
-                    // Sets modified flags on entity
-                    SetVariantString(sTime);
-                    AcceptEntityInput(trapIndex, "AddOutput");
-                    AcceptEntityInput(trapIndex, "FireUser1");
-                }
+            // Validate owner
+            if(IsPlayerExist(ownerIndex, false))
+            {
+                // Gets target name
+                static char sName[NORMAL_LINE_LENGTH];
+                GetClientName(targetIndex, sName, sizeof(sName));
+        
+                // Show message
+                SetGlobalTransTarget(ownerIndex);
+                PrintHintText(ownerIndex, "%t", "mutationheavy catched", sName);
+                
+                // Give reward
+                ZP_SetClientMoney(ownerIndex, ZP_GetClientMoney(ownerIndex) + ZOMBIE_CLASS_SKILL_REWARD);
             }
-            //Validate zombie
-            else if(ZP_IsPlayerZombie(targetIndex)) bStandOnTrap[targetIndex] = true; // Reset installing here!
+
+            // Get the trap model 
+            int trapIndex = GetEntPropEnt(entityIndex, Prop_Send, "m_hOwnerEntity");
+
+            // Validate entity
+            if(trapIndex != INVALID_ENT_REFERENCE)
+            {
+                // Play animation of the model
+                SetVariantString("trap");
+                AcceptEntityInput(trapIndex, "SetAnimation");
+            }
+            
+            // Kill after some duration
+            UTIL_RemoveEntity(entityIndex, ZP_GetClassSkillDuration(gZombie));
+            
+            // Remove touch hook
+            SDKUnhook(entityIndex, SDKHook_Touch, TrapTouchHook);
         }
+        //Validate zombie
+        else if(ZP_IsPlayerZombie(targetIndex)) bStandOnTrap[targetIndex] = true; // Reset installing here!
     }
 
     // Return on the success
@@ -361,7 +325,7 @@ public Action TrapTouchHook(int entityIndex, int targetIndex)
  * @param entityIndex       The entity index.
  * @param clientIndex       The client index.
  **/
-public Action TrapOnTransmit(int entityIndex, int clientIndex)
+public Action TrapTransmitHook(int entityIndex, int clientIndex)
 {
     // Validate human
     if(ZP_IsPlayerHuman(clientIndex))

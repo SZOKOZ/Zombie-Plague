@@ -20,50 +20,11 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
 
-/**
- * @section Hud elements flags.
- **/
-#define HIDEHUD_WEAPONSELECTION     (1<<0)   // Hide ammo count & weapon selection
-#define HIDEHUD_FLASHLIGHT          (1<<1)
-#define HIDEHUD_ALL                 (1<<2)
-#define HIDEHUD_HEALTH              (1<<3)   // Hide health & armor / suit battery
-#define HIDEHUD_PLAYERDEAD          (1<<4)   // Hide when local player's dead
-#define HIDEHUD_NEEDSUIT            (1<<5)   // Hide when the local player doesn't have the HEV suit
-#define HIDEHUD_MISCSTATUS          (1<<6)   // Hide miscellaneous status elements (trains, pickup history, death notices, etc)
-#define HIDEHUD_CHAT                (1<<7)   // Hide all communication elements (saytext, voice icon, etc)
-#define HIDEHUD_CROSSHAIR           (1<<8)   // Hide crosshairs
-#define HIDEHUD_VEHICLE_CROSSHAIR   (1<<9)   // Hide vehicle crosshair
-#define HIDEHUD_INVEHICLE           (1<<10)
-#define HIDEHUD_BONUS_PROGRESS      (1<<11)  // Hide bonus progress display (for bonus map challenges)
-#define HIDEHUD_RADAR               (1<<12)
-#define HIDEHUD_RADARANDTIMER       (3<<12)  
-/**
- * @endsection
- **/
- 
-/**
- * @section Entity effects flags.
- **/
-#define EF_BONEMERGE                (1<<0)     // Performs bone merge on client side
-#define EF_BRIGHTLIGHT              (1<<1)     // DLIGHT centered at entity origin
-#define EF_DIMLIGHT                 (1<<2)     // Player flashlight
-#define EF_NOINTERP                 (1<<3)     // Don't interpolate the next frame
-#define EF_NOSHADOW                 (1<<4)     // Disables shadow
-#define EF_NODRAW                   (1<<5)     // Prevents the entity from drawing and networking
-#define EF_NORECEIVESHADOW          (1<<6)     // Don't receive shadows
-#define EF_BONEMERGE_FASTCULL       (1<<7)     // For use with EF_BONEMERGE. If this is set, then it places this ents origin at its parent and uses the parent's bbox + the max extents of the aiment. Otherwise, it sets up the parent's bones every frame to figure out where to place the aiment, which is inefficient because it'll setup the parent's bones even if the parent is not in the PVS.
-#define EF_ITEM_BLINK               (1<<8)     // Makes the entity blink
-#define EF_PARENT_ANIMATES          (1<<9)     // Always assume that the parent entity is animating
-#define EF_FOLLOWBONE               (1<<10)    
-/**
- * @endsection
- **/
- 
 /**
  * @brief Creates commands for tools module.
  **/
@@ -79,12 +40,27 @@ void ToolsOnCommandInit(/*void*/)
 void ToolsOnCvarInit(/*void*/)
 {
     // Creates cvars
-    gCvarList[CVAR_LIGHT_BUTTON]   = FindConVar("zp_light_button");  
-    gCvarList[CVAR_MESSAGES_HELP]  = FindConVar("zp_messages_help");
-    gCvarList[CVAR_MESSAGES_BLOCK] = FindConVar("zp_messages_block");
+    gCvarList[CVAR_LIGHT_BUTTON]          = FindConVar("zp_light_button");  
+    gCvarList[CVAR_MESSAGES_OBJECTIVE]    = FindConVar("zp_messages_objective");
+    gCvarList[CVAR_MESSAGES_COUNTER]      = FindConVar("zp_messages_counter");
+    gCvarList[CVAR_MESSAGES_BLAST]        = FindConVar("zp_messages_blast");
+    gCvarList[CVAR_MESSAGES_DAMAGE]       = FindConVar("zp_messages_damage");
+    gCvarList[CVAR_MESSAGES_DONATE]       = FindConVar("zp_messages_donate");
+    gCvarList[CVAR_MESSAGES_CLASS_INFO]   = FindConVar("zp_messages_class_info");
+    gCvarList[CVAR_MESSAGES_CLASS_CHOOSE] = FindConVar("zp_messages_class_choose");
+    gCvarList[CVAR_MESSAGES_ITEM_INFO]    = FindConVar("zp_messages_item_info");
+    gCvarList[CVAR_MESSAGES_ITEM_ALL]     = FindConVar("zp_messages_item_all");
+    gCvarList[CVAR_MESSAGES_WEAPON_INFO]  = FindConVar("zp_messages_weapon_info");
+    gCvarList[CVAR_MESSAGES_WEAPON_ALL]   = FindConVar("zp_messages_weapon_all");
+    gCvarList[CVAR_MESSAGES_BLOCK]        = FindConVar("zp_messages_block");
+    gCvarList[CVAR_SEND_TABLES]           = FindConVar("sv_sendtables");
+    
+    // Sets locked cvars to their locked value
+    gCvarList[CVAR_SEND_TABLES].IntValue = 1;
     
     // Hook cvars
     HookConVarChange(gCvarList[CVAR_LIGHT_BUTTON], ToolsFOnCvarHook);
+    HookConVarChange(gCvarList[CVAR_SEND_TABLES],  CvarsUnlockOnCvarHook);
     
     // Load cvars
     ToolsOnCommandLoad();
@@ -114,7 +90,7 @@ void ToolsOnCommandLoad(/*void*/)
         // Unhook listeners
         RemoveCommandListener2(ToolsOnCommandListened, sCommand);
         return;
-    }
+        }
     
     // Hook listeners
     AddCommandListener(ToolsOnCommandListened, sCommand);
@@ -181,7 +157,7 @@ public Action ToolsOnCommandListened(int clientIndex, char[] commandMsg, int iAr
         else
         {
             // Switch on/off flashlight
-            ToolsSetClientFlashLight(clientIndex, true);
+            ToolsSetFlashLight(clientIndex, true);
             
             // Forward event to modules
             SoundsOnClientFlashLight(clientIndex);
@@ -263,493 +239,601 @@ bool ToolsForceToRespawn(int clientIndex)
 }
 
 /**
- * @brief Gets or sets the velocity of a client.
+ * @brief Gets or sets the velocity of a entity.
  *
- * @param clientIndex       The client index.
- * @param vVelocity         The velocity output, or velocity to set on client.
- * @param bApply            True to get client velocity, false to set it.
- * @param bStack            If modifying velocity, then true will stack new velocity onto the client.
+ * @param entityIndex       The entity index.
+ * @param vVelocity         The velocity output, or velocity to set on entity.
+ * @param bApply            True to get entity velocity, false to set it.
+ * @param bStack            If modifying velocity, then true will stack new velocity onto the entity.
  *                          current velocity, false will reset it.
  **/
-void ToolsClientVelocity(int clientIndex, float vVelocity[3], bool bApply = true, bool bStack = true)
+void ToolsSetVelocity(int entityIndex, float vVelocity[3], bool bApply = true, bool bStack = true)
 {
-    // If retrieve if true, then get client velocity
+    // If retrieve if true, then get entity velocity
     if(!bApply)
     {
-        // i = vector component
-        for(int i = 0; i < 3; i++)
-        {
-            vVelocity[i] = GetEntDataFloat(clientIndex, g_iOffset_PlayerVelocity + (i * 4));
-        }
+        // Gets entity velocity
+        ToolsGetVelocity(entityIndex, vVelocity);
         
         // Stop here
         return;
     }
     
-    // If stack is true, then add client velocity
+    // If stack is true, then add entity velocity
     if(bStack)
     {
-        // Gets client velocity
-        static float vecClientVelocity[3];
+        // Gets entity velocity
+        static float vSpeed[3];
+        ToolsGetVelocity(entityIndex, vSpeed);
         
-        // i = vector component
-        for(int i = 0; i < 3; i++)
-        {
-            vecClientVelocity[i] = GetEntDataFloat(clientIndex, g_iOffset_PlayerVelocity + (i * 4));
-        }
-        
-        AddVectors(vecClientVelocity, vVelocity, vVelocity);
+        // Add to the current
+        AddVectors(vSpeed, vVelocity, vVelocity);
     }
     
-    // Apply velocity on client
-    TeleportEntity(clientIndex, NULL_VECTOR, NULL_VECTOR, vVelocity);
+    // Apply velocity on entity
+    TeleportEntity(entityIndex, NULL_VECTOR, NULL_VECTOR, vVelocity);
 }
 
 /**
- * @brief Gets the velocity of a client.
+ * @brief Gets the velocity of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param vVelocity         The velocity output.
  **/
-void ToolsGetClientVelocity(int clientIndex, float vVelocity[3])
+void ToolsGetVelocity(int entityIndex, float vVelocity[3])
 {
-    // i = vector component
-    for(int i = 0; i < 3; i++)
+    // Find the datamap
+    if(!g_iOffset_Velocity)
     {
-        vVelocity[i] = GetEntDataFloat(clientIndex, g_iOffset_PlayerVelocity + (i * 4));
+        g_iOffset_Velocity = FindDataMapInfo(entityIndex, "m_vecVelocity");
     }
+   
+    // Gets origin of the entity
+    GetEntDataVector(entityIndex, g_iOffset_Velocity, vVelocity);
 }
 
 /**
- * @brief Sets the health of a client.
+ * @brief Gets the abs origin of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
+ * @param vPosition         The origin output.
+ **/
+void ToolsGetAbsOrigin(int entityIndex, float vPosition[3])
+{
+    // Find the datamap
+    if(!g_iOffset_Origin)
+    {
+        g_iOffset_Origin = FindDataMapInfo(entityIndex, "m_vecAbsOrigin");
+    }
+   
+    // Gets origin of the entity
+    GetEntDataVector(entityIndex, g_iOffset_Origin, vPosition);
+}
+
+/**
+ * @brief Gets the abs angle of a entity.
+ *
+ * @param entityIndex       The entity index.
+ * @param vAngle            The angle output.
+ **/
+void ToolsGetAbsAngles(int entityIndex, float vAngle[3])
+{
+    // Find the datamap
+    if(!g_iOffset_Angles)
+    {
+        g_iOffset_Angles = FindDataMapInfo(entityIndex, "m_angAbsRotation");
+    }
+   
+    // Gets angles of the entity
+    GetEntDataVector(entityIndex, g_iOffset_Angles, vAngle);
+}
+
+/**
+ * @brief Gets the render of a entity.
+ *
+ * @param entityIndex       The entity index.
+ * @param mColor            The offset index.
+ * @return                  The color amount.
+ **/
+int ToolsGetRenderColor(int entityIndex, ColorType mColor)
+{
+    // Gets render of the entity
+    return GetEntData(entityIndex, g_iOffset_Render + view_as<int>(mColor), 1);
+}
+
+/**
+ * @brief Gets the max weapons of a entity.
+ *
+ * @return                  The max weapon amount.
+ **/
+int ToolsGetMyWeapons(/*void*/)
+{
+    // Intialize counter
+    static int iAmount;
+    
+    // Calculate the my weapon table size
+    if(!iAmount)
+    {
+        iAmount = (g_iOffset_ActiveWeapon - g_iOffset_MyWeapons) / 4;
+    }
+    
+    // Gets weapons of the entity
+    return iAmount;
+}
+
+/**
+ * @brief Gets the health of a entity.
+ *
+ * @param entityIndex       The entity index.
+ * @param bMax              True to get maximum value, false to get health.  
+ * @return                  The health value.
+ **/
+ int ToolsGetHealth(int entityIndex, bool bMax = false)
+{
+    // Gets health of the entity
+    return GetEntData(entityIndex, bMax ? g_iOffset_MaxHealth : g_iOffset_Health);
+}
+
+/**
+ * @brief Sets the health of a entity.
+ *
+ * @param entityIndex       The entity index.
  * @param iValue            The health value.
  * @param bSet              True to set maximum value, false to modify health.  
  **/
-void ToolsSetClientHealth(int clientIndex, int iValue, bool bSet = false)
+void ToolsSetHealth(int entityIndex, int iValue, bool bSet = false)
 {
-    // Sets health of client
-    SetEntData(clientIndex, g_iOffset_PlayerHealth, iValue, _, true);
+    // Sets health of the entity
+    SetEntData(entityIndex, g_iOffset_Health, iValue, _, true);
     
     // If set is true, then set max health
     if(bSet) 
     {
         // Find the datamap
-        if(!g_iOffset_PlayerMaxHealth)
+        if(!g_iOffset_MaxHealth)
         {
-            g_iOffset_PlayerMaxHealth = FindDataMapInfo(clientIndex, "m_iMaxHealth");
+            g_iOffset_MaxHealth = FindDataMapInfo(entityIndex, "m_iMaxHealth");
         }
 
-        // Sets max health of client
-        SetEntData(clientIndex, g_iOffset_PlayerMaxHealth, iValue, _, true);
+        // Sets max health of the entity
+        SetEntData(entityIndex, g_iOffset_MaxHealth, iValue, _, true);
     }
 }
 
 /**
- * @brief Sets the speed of a client.
+ * @brief Gets the speed of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
+ * @return                  The LMV value.
+ **/
+/*float ToolsGetLMV(int entityIndex)
+{
+    // Gets lagged movement value of the entity
+    return GetEntDataFloat(entityIndex, g_iOffset_LMV);
+}*/
+
+/**
+ * @brief Sets the speed of a entity.
+ *
+ * @param entityIndex       The entity index.
  * @param flValue           The LMV value.
  **/
-void ToolsSetClientLMV(int clientIndex, float flValue)
+void ToolsSetLMV(int entityIndex, float flValue)
 {
-    // Sets lagged movement value of client
-    SetEntDataFloat(clientIndex, g_iOffset_PlayerLMV, flValue, true);
+    // Sets lagged movement value of the entity
+    SetEntDataFloat(entityIndex, g_iOffset_LMV, flValue, true);
 }
 
 /**
- * @brief Sets the armor of a client.
+ * @brief Gets the armor of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
+ * @return                  The armor value.
+ **/
+int ToolsGetArmor(int entityIndex)
+{
+    // Gets armor of the entity
+    return GetEntData(entityIndex, g_iOffset_Armor);
+}
+
+/**
+ * @brief Sets the armor of a entity.
+ *
+ * @param entityIndex       The entity index.
  * @param iValue            The armor value.
  **/
-void ToolsSetClientArmor(int clientIndex, int iValue)
+void ToolsSetArmor(int entityIndex, int iValue)
 {
-    // Sets armor of client
-    SetEntData(clientIndex, g_iOffset_PlayerArmor, iValue, _, true);
+    // Sets armor of the entity
+    SetEntData(entityIndex, g_iOffset_Armor, iValue, _, true);
 }
 
 /**
- * @brief Sets the team of a client.
+ * @brief Gets the team of an entity.
+ * 
+ * @param entityIndex       The entity index.
+ * @return                  The team index.
+ **/
+int ToolsGetTeam(int entityIndex)
+{
+    // Gets team on the entity
+    return GetEntData(entityIndex, g_iOffset_Team);
+}
+
+/**
+ * @brief Sets the team of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param iValue            The team index.
  **/
-void ToolsSetClientTeam(int clientIndex, int iValue)
+void ToolsSetTeam(int entityIndex, int iValue)
 {
     // Validate team
-    if(GetClientTeam(clientIndex) <= TEAM_SPECTATOR) /// Fix, thanks to inklesspen!
+    if(ToolsGetTeam(entityIndex) <= TEAM_SPECTATOR) /// Fix, thanks to inklesspen!
     {
-        // Sets team of client
-        ChangeClientTeam(clientIndex, iValue);
+        // Sets team of the entity
+        ChangeClientTeam(entityIndex, iValue);
     }
     else
     {
-        // Switch team of client
-        CS_SwitchTeam(clientIndex, iValue); 
+        // Switch team of the entity
+        CS_SwitchTeam(entityIndex, iValue); 
     }
 }
 
 /**
- * @brief Gets nightvision values on a client.
+ * @brief Gets nightvision values on a entity.
  *
- * @param clientIndex       The client index.
- * @param ownership         If true, function will return the value of the client ownership of nightvision.
- *                          If false, function will return the value of the client on/off state of the nightvision.
- * @return                  True if aspect of nightvision is enabled on the client, false if not.
+ * @param entityIndex       The entity index.
+ * @param ownership         If true, function will return the value of the entity ownership of nightvision.
+ *                          If false, function will return the value of the entity on/off state of the nightvision.
+ * @return                  True if aspect of nightvision is enabled on the entity, false if not.
  **/
-bool ToolsGetClientNightVision(int clientIndex, bool bOwnership = false)
+bool ToolsGetNightVision(int entityIndex, bool bOwnership = false)
 {
-    // If ownership is true, then gets the ownership of nightvision on client
-    return view_as<bool>(GetEntData(clientIndex, bOwnership ? g_iOffset_PlayerHasNightVision : g_iOffset_PlayerNightVisionOn, 1));
+    // If ownership is true, then gets the ownership of nightvision on entity
+    return view_as<bool>(GetEntData(entityIndex, bOwnership ? g_iOffset_HasNightVision : g_iOffset_NightVisionOn, 1));
 }
 
 /**
- * @brief Controls nightvision values on a client.
+ * @brief Controls nightvision values on a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param bEnable           Enable or disable an aspect of nightvision. (see ownership parameter)
- * @param bOwnership        If true, enable will toggle the client ownership of nightvision.
- *                          If false, enable will toggle the client on/off state of the nightvision.
+ * @param bOwnership        If true, enable will toggle the entity ownership of nightvision.
+ *                          If false, enable will toggle the entity on/off state of the nightvision.
  **/
-void ToolsSetClientNightVision(int clientIndex, bool bEnable, bool bOwnership = false)
+void ToolsSetNightVision(int entityIndex, bool bEnable, bool bOwnership = false)
 {
-    // If ownership is true, then toggle the ownership of nightvision on client
-    SetEntData(clientIndex, bOwnership ? g_iOffset_PlayerHasNightVision : g_iOffset_PlayerNightVisionOn, bEnable, 1, true);
+    // If ownership is true, then toggle the ownership of nightvision on entity
+    SetEntData(entityIndex, bOwnership ? g_iOffset_HasNightVision : g_iOffset_NightVisionOn, bEnable, 1, true);
 }
 
 /**
- * @brief Gets defuser value on a client.
+ * @brief Gets defuser value on a entity.
  *
- * @param clientIndex       The client index.
- * @return                  The aspect of the client defuser.
+ * @param entityIndex       The entity index.
+ * @return                  The aspect of the entity defuser.
  **/
-bool ToolsGetClientDefuser(int clientIndex)
+bool ToolsGetDefuser(int entityIndex)
 {
-    // Gets value on the client
-    return view_as<bool>(GetEntData(clientIndex, g_iOffset_PlayerHasDefuser, 1));
+    // Gets defuser on the entity
+    return view_as<bool>(GetEntData(entityIndex, g_iOffset_HasDefuser, 1));
 }
 
 /**
- * @brief Controls defuser value on a client.
+ * @brief Controls defuser value on a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param bEnable           Enable or disable an aspect of defuser.
  **/
-void ToolsSetClientDefuser(int clientIndex, bool bEnable)
+void ToolsSetDefuser(int entityIndex, bool bEnable)
 {
-    // Sets value on the client
-    SetEntData(clientIndex, g_iOffset_PlayerHasDefuser, bEnable, 1, true);
+    // Sets defuser on the entity
+    SetEntData(entityIndex, g_iOffset_HasDefuser, bEnable, 1, true);
 }
 
 /**
- * @brief Gets helmet value on a client.
+ * @brief Gets helmet value on a entity.
  *
- * @param clientIndex       The client index.
- * @return                  The aspect of the client helmet.
+ * @param entityIndex       The entity index.
+ * @return                  The aspect of the entity helmet.
  **/
-bool ToolsGetClientHelmet(int clientIndex)
+bool ToolsGetHelmet(int entityIndex)
 {
-    // Gets value on the client
-    return view_as<bool>(GetEntData(clientIndex, g_iOffset_PlayerHasHelmet, 1));
+    // Gets helmet on the entity
+    return view_as<bool>(GetEntData(entityIndex, g_iOffset_HasHelmet, 1));
 }
 
 /**
- * @brief Controls helmet value on a client.
+ * @brief Controls helmet value on a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param bEnable           Enable or disable an aspect of helmet.
  **/
-void ToolsSetClientHelmet(int clientIndex, bool bEnable)
+void ToolsSetHelmet(int entityIndex, bool bEnable)
 {
-    // Sets value on the client
-    SetEntData(clientIndex, g_iOffset_PlayerHasHelmet, bEnable, 1, true);
+    // Sets helmet on the entity
+    SetEntData(entityIndex, g_iOffset_HasHelmet, bEnable, 1, true);
 }
 
 /**
- * @brief Gets suit value on a client.
+ * @brief Gets suit value on a entity.
  *
- * @param clientIndex       The client index.
- * @return                  The aspect of the client suit.
+ * @param entityIndex       The entity index.
+ * @return                  The aspect of the entity suit.
  **/
-bool ToolsGetClientHeavySuit(int clientIndex)
+bool ToolsGetHeavySuit(int entityIndex)
 {
-    // Gets value on the client
-    return view_as<bool>(GetEntData(clientIndex, g_iOffset_PlayerHasHeavyArmor, 1));
+    // Gets suit on the entity
+    return view_as<bool>(GetEntData(entityIndex, g_iOffset_HasHeavyArmor, 1));
 }
 
 /**
- * @brief Controls suit value on a client.
+ * @brief Controls suit value on a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param bEnable           Enable or disable an aspect of suit.
  **/
-void ToolsSetClientHeavySuit(int clientIndex, bool bEnable)
+void ToolsSetHeavySuit(int entityIndex, bool bEnable)
 {
-    // Sets value on the client
-    SetEntData(clientIndex, g_iOffset_PlayerHasHeavyArmor, bEnable, 1, true);
+    // Sets suit on the entity
+    SetEntData(entityIndex, g_iOffset_HasHeavyArmor, bEnable, 1, true);
 }
 
 /**
- * @brief Gets the active weapon index of a client.
+ * @brief Gets the active weapon index of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @return                  The weapon index.
  **/
-int ToolsGetClientActiveWeapon(int clientIndex)
+int ToolsGetActiveWeapon(int entityIndex)
 {
-    // Gets value on the client    
-    return GetEntDataEnt2(clientIndex, g_iOffset_PlayerActiveWeapon);
+    // Gets weapon on the entity    
+    return GetEntDataEnt2(entityIndex, g_iOffset_ActiveWeapon);
 }
 
 /**
- * @brief Sets the active weapon index of a client.
+ * @brief Sets the active weapon index of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param weaponIndex       The weapon index.
  **/
-void ToolsSetClientActiveWeapon(int clientIndex, int weaponIndex)
+void ToolsSetActiveWeapon(int entityIndex, int weaponIndex)
 {
-    // Sets value on the client    
-    SetEntDataEnt2(clientIndex, g_iOffset_PlayerActiveWeapon, weaponIndex, true);
+    // Sets weapon on the entity    
+    SetEntDataEnt2(entityIndex, g_iOffset_ActiveWeapon, weaponIndex, true);
 }
 
 /**
- * @brief Gets the last weapon index of a client.
+ * @brief Gets the addon bits of a entity.
  *
- * @param clientIndex       The client index.
- * @return                  The weapon index.
- **/
-int ToolsGetClientLastWeapon(int clientIndex)
-{
-    // Gets value on the client    
-    return GetEntDataEnt2(clientIndex, g_iOffset_PlayerLastWeapon);
-}
-
-/**
- * @brief Sets the last weapon index of a client.
- *
- * @param clientIndex       The client index.
- * @param weaponIndex       The weapon index.
- **/
-void ToolsSetClientLastWeapon(int clientIndex, int weaponIndex)
-{
-    // Sets value on the client    
-    SetEntDataEnt2(clientIndex, g_iOffset_PlayerLastWeapon, weaponIndex, true);
-}
-
-/**
- * @brief Gets the addon bits of a client.
- *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @return                  The addon bits.
  **/
-int ToolsGetClientAddonBits(int clientIndex)
+int ToolsGetAddonBits(int entityIndex)
 {
-    // Gets value on the client    
-    return GetEntData(clientIndex, g_iOffset_PlayerAddonBits);
+    // Gets addon value on the entity    
+    return GetEntData(entityIndex, g_iOffset_AddonBits);
 }
 
 /**
- * @brief Sets the addon bits index of a client.
+ * @brief Sets the addon bits index of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param iValue            The addon bits.
  **/
-void ToolsSetClientAddonBits(int clientIndex, int iValue)
+void ToolsSetAddonBits(int entityIndex, int iValue)
 {
-    // Sets value on the client    
-    SetEntData(clientIndex, g_iOffset_PlayerAddonBits, iValue, _, true);
+    // Sets addon value on the entity    
+    SetEntData(entityIndex, g_iOffset_AddonBits, iValue, _, true);
 }
 
 /**
- * @brief Gets the observer mode of a client.
+ * @brief Gets the observer mode of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @return                  The mode index.
  **/
-int ToolsGetClientObserverMode(int clientIndex)
+int ToolsGetObserverMode(int entityIndex)
 {
-    // Gets value on the client    
-    return GetEntData(clientIndex, g_iOffset_PlayerObserverMode);
+    // Gets obs mode on the entity    
+    return GetEntData(entityIndex, g_iOffset_ObserverMode);
 }
 
 /**
- * @brief Gets the observer target of a client.
+ * @brief Gets the observer target of a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @return                  The target index.
  **/
-int ToolsGetClientObserverTarget(int clientIndex)
+int ToolsGetObserverTarget(int entityIndex)
 {
-    // Gets value on the client    
-    return GetEntDataEnt2(clientIndex, g_iOffset_PlayerObserverTarget);
+    // Gets obs mode on the entity    
+    return GetEntDataEnt2(entityIndex, g_iOffset_ObserverTarget);
 }
 
 /**
- * @brief Gets or sets a client score or deaths.
- * 
- * @param clientIndex       The client index.
- * @param bScore            True to look at score, false to look at deaths.  
- * @return                  The score or death count of the client.
- **/
-int ToolsGetClientScore(int clientIndex, bool bScore = true)
-{
-    // If score is true, then return client score, otherwise return client deaths
-    return bScore ? GetClientFrags(clientIndex) : GetClientDeaths(clientIndex);
-}
-
-/**
- * @brief Gets hitgroup value on a client.
+ * @brief Gets hitgroup value on a entity.
  *
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @return                  The hitgroup index.
  **/
-int ToolsGetClientHitGroup(int clientIndex)
+int ToolsGetHitGroup(int entityIndex)
 {
-    // Gets value on the client    
-    return GetEntData(clientIndex, g_iOffset_PlayerHitGroup);
+    // Gets hitgroup on the entity    
+    return GetEntData(entityIndex, g_iOffset_HitGroup);
 }
 
 /**
- * @brief Sets a client score or deaths.
+ * @brief Gets or sets a entity score or deaths.
  * 
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
+ * @param bScore            True to look at score, false to look at deaths.  
+ * @return                  The score or death count of the entity.
+ **/
+int ToolsGetScore(int entityIndex, bool bScore = true)
+{
+    // Find the datamap
+    if(!g_iOffset_Frags || !g_iOffset_Death)
+    {
+        g_iOffset_Frags = FindDataMapInfo(entityIndex, "m_iFrags");
+        g_iOffset_Death = FindDataMapInfo(entityIndex, "m_iDeaths");
+    }
+    
+    // If score is true, then return entity score, otherwise return entity deaths
+    return GetEntData(entityIndex, bScore ? g_iOffset_Frags : g_iOffset_Death);
+}
+
+/**
+ * @brief Sets a entity score or deaths.
+ * 
+ * @param entityIndex       The entity index.
  * @param bScore            True to look at score, false to look at deaths.  
  * @param iValue            The score/death amount.
  **/
-void ToolsSetClientScore(int clientIndex, bool bScore = true, int iValue = 0)
+void ToolsSetScore(int entityIndex, bool bScore = true, int iValue = 0)
 {
     // Find the datamap
-    if(!g_iOffset_PlayerFrags || !g_iOffset_PlayerDeath)
+    if(!g_iOffset_Frags || !g_iOffset_Death)
     {
-        g_iOffset_PlayerFrags = FindDataMapInfo(clientIndex, "m_iFrags");
-        g_iOffset_PlayerDeath = FindDataMapInfo(clientIndex, "m_iDeaths");
+        g_iOffset_Frags = FindDataMapInfo(entityIndex, "m_iFrags");
+        g_iOffset_Death = FindDataMapInfo(entityIndex, "m_iDeaths");
     }
     
-    // If score is true, then set client score, otherwise set client deaths
-    SetEntData(clientIndex, bScore ? g_iOffset_PlayerFrags : g_iOffset_PlayerDeath, iValue, _, true);
+    // If score is true, then set entity score, otherwise set entity deaths
+    SetEntData(entityIndex, bScore ? g_iOffset_Frags : g_iOffset_Death, iValue, _, true);
 }
 
 
 /**
- * @brief Sets the gravity of a client.
+ * @brief Sets the gravity of a entity.
  * 
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param flValue           The gravity amount.
  **/
-void ToolsSetClientGravity(int clientIndex, float flValue)
+void ToolsSetGravity(int entityIndex, float flValue)
 {
     // Find the datamap
-    if(!g_iOffset_PlayerGravity)
+    if(!g_iOffset_Gravity)
     {
-        g_iOffset_PlayerGravity = FindDataMapInfo(clientIndex, "m_flGravity");
+        g_iOffset_Gravity = FindDataMapInfo(entityIndex, "m_flGravity");
     }
     
-    // Sets value on the client
-    SetEntDataFloat(clientIndex, g_iOffset_PlayerGravity, flValue, true);
+    // Sets gravity on the entity
+    SetEntDataFloat(entityIndex, g_iOffset_Gravity, flValue, true);
 }
 
 /**
- * @brief Sets the spotting of a client.
+ * @brief Sets the spotting of a entity.
  * 
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param bEnable           Enable or disable an aspect of spotting.
  **/
-void ToolsSetClientSpot(int clientIndex, bool bEnable)
+void ToolsSetSpot(int entityIndex, bool bEnable)
 {
     // If retrieve if true, then reset variables
     if(!bEnable)
     {
-        // Sets value on the client
-        SetEntData(clientIndex, g_iOffset_PlayerSpotted, false, 1, true);
-        SetEntData(clientIndex, g_iOffset_PlayerSpottedByMask, false, _, true);
-        SetEntData(clientIndex, g_iOffset_PlayerSpottedByMask + 4, false, _, true); /// That is table
-        SetEntData(clientIndex, g_iOffset_PlayerCanBeSpotted, 0, _, true);
+        // Sets value on the entity
+        SetEntData(entityIndex, g_iOffset_Spotted, false, 1, true);
+        SetEntData(entityIndex, g_iOffset_SpottedByMask, false, _, true);
+        SetEntData(entityIndex, g_iOffset_SpottedByMask + 4, false, _, true); /// That is table
+        SetEntData(entityIndex, g_iOffset_CanBeSpotted, 0, _, true);
     }
     else
     {
-        // Sets value on the client
-        SetEntData(clientIndex, g_iOffset_PlayerCanBeSpotted, 9, _, true);
+        // Sets value on the entity
+        SetEntData(entityIndex, g_iOffset_CanBeSpotted, 9, _, true);
     }
 }
 
 /**
- * @brief Sets the detecting of a client.
+ * @brief Sets the detecting of a entity.
  * 
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param bEnable           Enable or disable an aspect of detection.
  **/
-void ToolsSetClientDetecting(int clientIndex, bool bEnable)
+void ToolsSetDetecting(int entityIndex, bool bEnable)
 {
-    // Sets value on the client
-    SetEntDataFloat(clientIndex, g_iOffset_PlayerDetected, bEnable ? (GetGameTime() + 9999.0) : 0.0, true);
+    // Sets glow on the entity
+    SetEntDataFloat(entityIndex, g_iOffset_Detected, bEnable ? (GetGameTime() + 9999.0) : 0.0, true);
 }
 
 /**
- * @brief Sets the hud of a client.
+ * @brief Sets the hud of a entity.
  * 
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param bEnable           Enable or disable an aspect of hud.
  **/
-void ToolsSetClientHud(int clientIndex, bool bEnable)
+void ToolsSetHud(int entityIndex, bool bEnable)
 {   
-    // Sets value on the client
-    SetEntData(clientIndex, g_iOffset_PlayerHUD, bEnable ? (GetEntData(clientIndex, g_iOffset_PlayerHUD) & ~HIDEHUD_CROSSHAIR) : (GetEntData(clientIndex, g_iOffset_PlayerHUD) | HIDEHUD_CROSSHAIR), _, true);
+    // Sets hud type on the entity
+    SetEntData(entityIndex, g_iOffset_HUD, bEnable ? (GetEntData(entityIndex, g_iOffset_HUD) & ~HIDEHUD_CROSSHAIR) : (GetEntData(entityIndex, g_iOffset_HUD) | HIDEHUD_CROSSHAIR), _, true);
 }
 
 /**
- * @brief Sets the arms of a client.
+ * @brief Sets the arms of a entity.
  * 
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param sModel            The model path.
  * @param iMaxLen           The lenght of string. 
  **/
-void ToolsSetClientArm(int clientIndex, char[] sModel, int iMaxLen)
+void ToolsSetArm(int entityIndex, char[] sModel, int iMaxLen)
 {
-    // Sets value on the client
-    SetEntDataString(clientIndex, g_iOffset_PlayerArms, sModel, iMaxLen, true);
+    // Sets arm on the entity
+    SetEntDataString(entityIndex, g_iOffset_Arms, sModel, iMaxLen, true);
 }
 
 /**
- * @brief Sets the attack delay of a client.
+ * @brief Sets the attack delay of a entity.
  * 
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param flValue           The speed amount.
  **/
-void ToolsSetClientAttack(int clientIndex, float flValue)
+void ToolsSetAttack(int entityIndex, float flValue)
 {
-    // Sets value on the client
-    SetEntDataFloat(clientIndex, g_iOffset_PlayerAttack, flValue, true);
+    // Sets next attack on the entity
+    SetEntDataFloat(entityIndex, g_iOffset_Attack, flValue, true);
 }
 
 /**
- * @brief Sets the flashlight of a client.
+ * @brief Sets the flashlight of a entity.
  * 
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param bEnable           Enable or disable an aspect of flashlight.
  **/
-void ToolsSetClientFlashLight(int clientIndex, bool bEnable)
+void ToolsSetFlashLight(int entityIndex, bool bEnable)
 {
-    // Sets value on the client
-    ToolsSetEntityEffect(clientIndex, bEnable ? (ToolsGetEntityEffect(clientIndex) ^ EF_DIMLIGHT) : 0);
+    // Sets flashlight on the entity
+    ToolsSetEffect(entityIndex, bEnable ? (ToolsGetEffect(entityIndex) ^ EF_DIMLIGHT) : 0);
 }
 
 /**
- * @brief Sets the fov of a client.
+ * @brief Sets the fov of a entity.
  * 
- * @param clientIndex       The client index.
+ * @param entityIndex       The entity index.
  * @param iValue            (Optional) The fov amount.
  **/
-void ToolsSetClientFov(int clientIndex, int iValue = 90)
+void ToolsSetFov(int entityIndex, int iValue = 90)
 {
-    // Sets value on the client
-    SetEntData(clientIndex, g_iOffset_PlayerFov, iValue, _, true);
-    SetEntData(clientIndex, g_iOffset_PlayerDefaultFOV, iValue, _, true);
+    // Sets fov on the entity
+    SetEntData(entityIndex, g_iOffset_Fov, iValue, _, true);
+    SetEntData(entityIndex, g_iOffset_DefaultFOV, iValue, _, true);
 }
 
-/*_____________________________________________________________________________________________________*/
+/**
+ * @brief Sets body/skin for the entity.
+ *
+ * @param entityIndex       The entity index.
+ * @param iBody             (Optional) The body index.
+ * @param iSkin             (Optional) The skin index.
+ **/
+void ToolsSetTextures(int entityIndex, int iBody = -1, int iSkin = -1)
+{
+    if(iBody != -1) SetEntData(entityIndex, g_iOffset_Body, iBody, _, true);
+    if(iSkin != -1) SetEntData(entityIndex, g_iOffset_Skin, iSkin, _, true);
+}
 
 /**
  * @brief Gets the effect of an entity.
@@ -757,10 +841,10 @@ void ToolsSetClientFov(int clientIndex, int iValue = 90)
  * @param entityIndex       The entity index.
  * @return                  The effect value.
  **/
-int ToolsGetEntityEffect(int entityIndex)
+int ToolsGetEffect(int entityIndex)
 {
-    // Gets value on the client    
-    return GetEntData(entityIndex, g_iOffset_EntityEffects);
+    // Gets effect on the entity    
+    return GetEntData(entityIndex, g_iOffset_Effects);
 }
 
 /**
@@ -769,10 +853,28 @@ int ToolsGetEntityEffect(int entityIndex)
  * @param entityIndex       The entity index.
  * @param iValue            The effect value.
  **/
-void ToolsSetEntityEffect(int entityIndex, int iValue)
+void ToolsSetEffect(int entityIndex, int iValue)
 {
-    // Sets value on the entity
-    SetEntData(entityIndex, g_iOffset_EntityEffects, iValue, _, true);
+    // Sets effect on the entity
+    SetEntData(entityIndex, g_iOffset_Effects, iValue, _, true);
+}
+
+/**
+ * @brief Gets the activator of an entity.
+ *
+ * @param entityIndex       The entity index.
+ * @return                  The activator index.
+ **/
+int ToolsGetActivator(int entityIndex)
+{
+    // Find the datamap
+    if(!g_iOffset_Activator)
+    {
+        g_iOffset_Activator = FindDataMapInfo(entityIndex, "m_pActivator");
+    }
+    
+    // Gets activator on the entity
+    return GetEntDataEnt2(entityIndex, g_iOffset_Activator);
 }
 
 /**
@@ -781,10 +883,10 @@ void ToolsSetEntityEffect(int entityIndex, int iValue)
  * @param entityIndex       The entity index.
  * @param iModel            The model index.
  **/
-void ToolsSetEntityModelIndex(int entityIndex, int iModel)
+void ToolsSetModelIndex(int entityIndex, int iModel)
 {
-    // Sets value on the entity
-    SetEntData(entityIndex, g_iOffset_EntityModelIndex, iModel, _, true);
+    // Sets index on the entity
+    SetEntData(entityIndex, g_iOffset_ModelIndex, iModel, _, true);
 }
 
 /**
@@ -793,10 +895,10 @@ void ToolsSetEntityModelIndex(int entityIndex, int iModel)
  * @param entityIndex       The entity index.
  * @return                  The owner index.
  **/
-int ToolsGetEntityOwner(int entityIndex)
+int ToolsGetOwner(int entityIndex)
 {
-    // Gets value on the entity
-    return GetEntDataEnt2(entityIndex, g_iOffset_EntityOwnerEntity);
+    // Gets owner on the entity
+    return GetEntDataEnt2(entityIndex, g_iOffset_OwnerEntity);
 }
 
 /**
@@ -805,35 +907,10 @@ int ToolsGetEntityOwner(int entityIndex)
  * @param entityIndex       The entity index.
  * @param ownerIndex        The owner index.
  **/
-void ToolsSetEntityOwner(int entityIndex, int ownerIndex)
+void ToolsSetOwner(int entityIndex, int ownerIndex)
 {
-    SetEntDataEnt2(entityIndex, g_iOffset_EntityOwnerEntity, ownerIndex, true);
-}
-
-/**
- * @brief Sets the team of an entity.
- * 
- * @param entityIndex       The entity index.
- * @param iValue            The team index.
- **/
-void ToolsSetEntityTeam(int entityIndex, int iValue)
-{
-    SetEntData(entityIndex, g_iOffset_EntityTeam, iValue);
-}
-
-/**
- * @brief Gets the origin of an entity.
- *
- * @param entityIndex       The entity index.
- * @param vOrigin           The origin output.
- **/
-void ToolsGetEntityOrigin(int entityIndex, float vOrigin[3])
-{
-    // i = vector component
-    for(int i = 0; i < 3; i++)
-    {
-        vOrigin[i] = GetEntDataFloat(entityIndex, g_iOffset_EntityOrigin + (i * 4));
-    }
+    // Sets owner on the entity
+    SetEntDataEnt2(entityIndex, g_iOffset_OwnerEntity, ownerIndex, true);
 }
 
 /*_____________________________________________________________________________________________________*/
@@ -855,28 +932,246 @@ bool ToolsLookupAttachment(int entityIndex, char[] sAttach)
  *
  * @param entityIndex       The entity index.
  * @param sAttach           The attachment name.
- * @param vOrigin           The origin ouput.
- * @param vAngle            The angle ouput.
+ * @param vPosition         The origin output.
+ * @param vAngle            The angle output.
  **/
-void ToolsGetAttachment(int entityIndex, char[] sAttach, float vOrigin[3], float vAngle[3])
+void ToolsGetAttachment(int entityIndex, char[] sAttach, float vPosition[3], float vAngle[3])
 {
-    // Validate length
-    if(!hasLength(sAttach))
-    {
-        return;
-    }
-    
     // Validate windows
     if(gServerData.Platform == OS_Windows)
     {
-        SDKCall(hSDKCallGetAttachment, entityIndex, sAttach, vOrigin, vAngle); 
+        SDKCall(hSDKCallGetAttachment, entityIndex, sAttach, vPosition, vAngle); 
     }
     else
     {
-        int iAnimating = SDKCall(hSDKCallLookupAttachment, entityIndex, sAttach);
-        if(iAnimating)
+        int iAttach = SDKCall(hSDKCallLookupAttachment, entityIndex, sAttach);
+        if(iAttach)
         {
-            SDKCall(hSDKCallGetAttachment, entityIndex, iAnimating, vOrigin, vAngle); 
+            SDKCall(hSDKCallGetAttachment, entityIndex, iAttach, vPosition, vAngle); 
         }
     }
+}
+
+/**
+ * @brief Gets the sequence of the entity.
+ *
+ * @param entityIndex       The entity index.
+ * @param sAnim             The sequence name.
+ * @return                  The sequence index.
+ **/
+int ToolsLookupSequence(int entityIndex, char[] sAnim)
+{
+    // Validate windows
+    if(gServerData.Platform == OS_Windows)
+    {
+        return SDKCall(hSDKCallLookupSequence, entityIndex, sAnim); 
+    }
+    else
+    {
+        // Gets 'CStudioHdr' class
+        Address pStudioHdrClass = ToolsGetStudioHdrClass(entityIndex);
+        if(pStudioHdrClass == Address_Null)
+        {
+            return -1;
+        }
+        
+        return SDKCall(hSDKCallLookupSequence, pStudioHdrClass, sAnim); 
+    }
+}
+
+/**
+ * @brief Gets the pose of the entity.
+ *
+ * @param entityIndex       The entity index.
+ * @param sPose             The pose name.
+ * @return                  The pose parameter.
+ **/
+int ToolsLookupPoseParameter(int entityIndex, char[] sPose)
+{
+    // Gets 'CStudioHdr' class
+    Address pStudioHdrClass = ToolsGetStudioHdrClass(entityIndex);
+    if(pStudioHdrClass == Address_Null)
+    {
+        return -1;
+    }
+    
+    return SDKCall(hSDKCallLookupPoseParameter, entityIndex, pStudioHdrClass, sPose); 
+}
+
+/**
+ * @brief Resets the sequence of the entity.
+ *
+ * @param entityIndex       The entity index.
+ * @param sAnim             The sequence name.
+ **/
+void ToolsResetSequence(int entityIndex, char[] sAnim) 
+{ 
+    // Find the sequence index
+    int iSequence = ToolsLookupSequence(entityIndex, sAnim); 
+    if(iSequence < 0) 
+    {
+        return; 
+    }
+    
+    // Tracker 17868: If the sequence number didn't actually change, but you call resetsequence info, it changes
+    // the newsequenceparity bit which causes the client to call m_flCycle.Reset() which causes a very slight 
+    // discontinuity in looping animations as they reset around to cycle 0.0. This was causing the parentattached
+    // helmet on barney to hitch every time barney's idle cycled back around to its start.
+    SDKCall(hSDKCallResetSequence, entityIndex, iSequence);
+}
+
+/**
+ * @brief Gets the total sequence amount.
+ *
+ * @note The game has two methods for getting the sequence count:
+ * 
+ * 1. Local sequence count if the model has sequences built in the model itself.
+ * 2. Virtual model sequence count if the model inherits the sequences from a different model, also known as an include model.
+ *
+ * @param entityIndex       The entity index.
+ * @return                  The sequence count.
+ **/
+int ToolsGetSequenceCount(int entityIndex)
+{
+    // Gets 'CStudioHdr' class
+    Address pStudioHdrClass = ToolsGetStudioHdrClass(entityIndex);
+    if(pStudioHdrClass == Address_Null)
+    {
+        return -1;
+    }
+    
+    // Gets 'studiohdr_t' class
+    Address pStudioHdrStruct = view_as<Address>(LoadFromAddress(pStudioHdrClass + view_as<Address>(StudioHdrClass_StudioHdrStruct), NumberType_Int32));
+    if(pStudioHdrStruct != Address_Null)
+    {
+        int localSequenceCount = LoadFromAddress(pStudioHdrStruct + view_as<Address>(StudioHdrStruct_SequenceCount), NumberType_Int32);
+        if(localSequenceCount)
+        {
+            return localSequenceCount;
+        }
+    }
+    
+    // Gets 'virtualmodel_t' class
+    Address pVirtualModelStruct = view_as<Address>(LoadFromAddress(pStudioHdrClass + view_as<Address>(StudioHdrClass_VirualModelStruct), NumberType_Int32));
+    if(pVirtualModelStruct != Address_Null)
+    {
+        return LoadFromAddress(pVirtualModelStruct + view_as<Address>(VirtualModelStruct_SequenceVector_Size), NumberType_Int32);
+    }
+    
+    // Return on unsuccess 
+    return -1;
+}
+
+/**
+ * @brief Gets the duration of a sequence.
+ * 
+ * @param entityIndex       The entity index.
+ * @param iSequence         The sequence index.
+ * @return                  The sequence duration.  
+ **/
+float ToolsGetSequenceDuration(int entityIndex, int iSequence)
+{
+    // Gets 'CStudioHdr' class
+    Address pStudioHdrClass = ToolsGetStudioHdrClass(entityIndex);
+    if(pStudioHdrClass == Address_Null)
+    {
+        return 0.0;
+    }
+
+    return SDKCall(hSDKCallGetSequenceDuration, entityIndex, pStudioHdrClass, iSequence);
+}
+
+/**
+ * @brief Gets the activity of a sequence.
+ *
+ * @param entityIndex       The entity index.
+ * @param iSequence         The sequence index.
+ * @return                  The activity index.
+ **/
+int ToolsGetSequenceActivity(int entityIndex, int iSequence)
+{
+    return SDKCall(hSDKCallGetSequenceActivity, entityIndex, iSequence);
+}
+
+/**
+ * @brief Gets the hdr class address.
+ * 
+ * @param entityIndex       The entity index.
+ * @return                  The address of the hdr.    
+ **/
+Address ToolsGetStudioHdrClass(int entityIndex)
+{
+    return view_as<Address>(GetEntData(entityIndex, Animating_StudioHdr));
+}
+
+/**
+ * @brief Update a entity transmit state.
+ * 
+ * @param entityIndex       The entity index.
+ **/
+void ToolsUpdateTransmitState(int entityIndex)
+{
+    SDKCall(hSDKCallUpdateTransmitState, entityIndex);
+}
+
+/**
+ * @brief Checks that the entity is a brush.
+ * 
+ * @param entityIndex       The entity index.
+ **/
+bool ToolsIsBSPModel(int entityIndex)
+{
+    return SDKCall(hSDKCallIsBSPModel, entityIndex);
+}
+
+/**
+ * @brief Emulate 'bullet_shot' on the server and does the damage calculations.
+ *
+ * @param clientIndex       The client index.
+ * @param weaponIndex       The weapon index.
+ * @param vPosition         The position to the spawn.
+ * @param vAngle            The angle to the spawn.
+ * @param iMode             The mode index.
+ * @param iSeed             The randomizing seed.
+ * @param flInaccuracy      The inaccuracy variable.
+ * @param flSpread          The spread variable.
+ * @param iSoundType        The sound type.
+ *
+ * @return                  True or false.
+ **/
+bool ToolsFireBullets(int clientIndex, int weaponIndex, float vPosition[3], float vAngle[3], int iMode, int iSeed, float flInaccuracy, float flSpread, int iSoundType)
+{
+    // Create a bullet decal
+    TE_Start("Shotgun Shot");
+    TE_WriteVector("m_vecOrigin", vPosition);
+    TE_WriteFloat("m_vecAngles[0]", vAngle[0]);
+    TE_WriteFloat("m_vecAngles[1]", vAngle[1]);
+    TE_WriteNum("m_weapon", WeaponsGetItemDefenition(weaponIndex));
+    TE_WriteNum("m_iMode", iMode);
+    TE_WriteNum("m_iSeed", iSeed);
+    TE_WriteNum("m_iPlayer", clientIndex - 1);
+    TE_WriteFloat("m_fInaccuracy", flInaccuracy);
+    TE_WriteFloat("m_fSpread", flSpread);
+    TE_SendToAll();
+    
+    // If windows, then stop
+    if(gServerData.Platform == OS_Windows)
+    {
+        return false;
+    }
+    
+    // Find the datamap
+    if(!g_iOffset_LagCompensation)
+    {
+        g_iOffset_LagCompensation = FindDataMapInfo(clientIndex, "m_bLagCompensation");
+    }
+    
+    // Emulate shot on the server side and block lag compensation
+    bool bLock = view_as<bool>(GetEntData(clientIndex, g_iOffset_LagCompensation));
+    SetEntData(clientIndex, g_iOffset_LagCompensation, false, 1, true);
+    SDKCall(hSDKCallFireBullets, clientIndex, weaponIndex, 0, vPosition, vAngle, iMode, iSeed, flInaccuracy, flSpread, 0.0, 0.0, iSoundType, GetEntDataFloat(weaponIndex, g_iOffset_RecoilIndex));
+    SetEntData(clientIndex, g_iOffset_LagCompensation, bLock, 1, true);
+
+    // Return on the success
+    return true;
 }

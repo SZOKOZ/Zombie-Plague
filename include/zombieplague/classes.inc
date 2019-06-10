@@ -11,11 +11,11 @@
  * 
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
  * details.
  *
  * You should have received a copy of the GNU General Public License along with
- * this program.  If not, see <http://www.gnu.org/licenses/>.
+ * this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * As a special exception, AlliedModders LLC gives you permission to link the
  * code of this program (as well as its derivative works) to "Half-Life 2," the
@@ -49,13 +49,33 @@ enum /*BonusType*/
 /**
  * @endsection
  **/
+ 
+/**
+ * @section Number of valid animations.
+ **/ 
+enum AnimType
+{
+    AnimType_Invalid = -1,        /** Used as return value when an event doens't exist. */
+    
+    AnimType_FirePrimary,
+    AnimType_FireSecondary,
+    AnimType_ThrowGrenade,
+    AnimType_Jump,
+    AnimType_Reload,
+    AnimType_ReloadStart,
+    AnimType_ReloadLoop,
+    AnimType_ReloadEnd
+};
+/**
+ * @endsection
+ **/
 
 #include "zombieplague/classes/account.inc"
 #include "zombieplague/classes/skillsystem.inc"
 #include "zombieplague/classes/levelsystem.inc" 
  
 /**
- * @brief Called when a client became a zombie/human.
+ * @brief Called when a client became/spawn a zombie/human.
  * 
  * @param clientIndex       The client index.
  * @param attackerIndex     The attacker index.
@@ -63,6 +83,26 @@ enum /*BonusType*/
  * @noreturn
  **/
 forward void ZP_OnClientUpdated(int clientIndex, int attackerIndex); 
+
+/**
+ * @brief Called when a client has been killed.
+ * 
+ * @param clientIndex       The client index.
+ * @param attackerIndex     The attacker index.
+ *
+ * @noreturn
+ **/
+forward void ZP_OnClientDeath(int clientIndex, int attackerIndex);
+
+/**
+ * @brief Called right before a client is about to respawn.
+ * 
+ * @param clientIndex       The client index.
+ *
+ * @return                  Plugin_Handled or Plugin_Stop to block respawn. Anything else
+ *                              (like Plugin_Continue) to allow use.
+ **/
+forward Action ZP_OnClientRespawn(int clientIndex);
  
 /**
  * @brief Called before show a class in the class menu.
@@ -335,6 +375,15 @@ native float ZP_GetClassSkillCountdown(int classID);
  * @return                  True or false. 
  **/
 native bool ZP_IsClassSkillBar(int classID);
+
+/**
+ * @brief Checks the health sprite of the class.
+ *
+ * @param classID           The class index.
+ *
+ * @return                  True or false. 
+ **/
+native bool ZP_IsClassHealthSprite(int classID);
 
 /**
  * @brief Gets the regen health of the class.
@@ -623,7 +672,7 @@ native int ZP_GetClassSoundJumpID(int classID);
  *
  * @return                  True or false.
  **/
-stock bool ZP_IsPlayerType(const int clientIndex, const char[] sType)
+stock bool ZP_IsPlayerType(int clientIndex, char[] sType)
 {
     // Gets class type
     static char sClassType[SMALL_LINE_LENGTH];
@@ -631,4 +680,22 @@ stock bool ZP_IsPlayerType(const int clientIndex, const char[] sType)
     
     // Return on success
     return (!strcmp(sClassType, sType, false));
+}
+
+/**
+ * @brief Sets the player animating event.
+ *
+ * @param clientIndex       The client index.
+ * @param animType          The event type.
+ * @param iData             The activity index.
+ *
+ * @link https://github.com/ValveSoftware/source-sdk-2013/blob/0d8dceea4310fde5706b3ce1c70609d72a38efdf/mp/src/game/shared/ai_activity.h
+ **/
+stock void ZP_SetPlayerAnimation(int clientIndex, AnimType animType, int iData = 0)
+{
+    TE_Start("PlayerAnimEvent");
+    TE_WriteNum("m_hPlayer", EntIndexToEntRef(clientIndex) & 0x7FFF);
+    TE_WriteNum("m_iEvent", view_as<int>(animType));
+    TE_WriteNum("m_nData", iData);
+    TE_SendToAll();
 }

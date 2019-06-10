@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -86,18 +86,18 @@ public void ZP_OnEngineExecute(/*void*/)
  * @brief Called before show an extraitem in the equipment menu.
  * 
  * @param clientIndex       The client index.
- * @param extraitemIndex    The item index.
+ * @param itemID            The item index.
  *
  * @return                  Plugin_Handled to disactivate showing and Plugin_Stop to disabled showing. Anything else
  *                              (like Plugin_Continue) to allow showing and calling the ZP_OnClientBuyExtraItem() forward.
  **/
-public Action ZP_OnClientValidateExtraItem(int clientIndex, int extraitemIndex)
+public Action ZP_OnClientValidateExtraItem(int clientIndex, int itemID)
 {
     // Check the item index
-    if(extraitemIndex == gItem)
+    if(itemID == gItem)
     {
         // Validate access
-        if(ZP_IsPlayerHasWeapon(clientIndex, gWeapon))
+        if(ZP_IsPlayerHasWeapon(clientIndex, gWeapon) != INVALID_ENT_REFERENCE)
         {
             return Plugin_Handled;
         }
@@ -111,12 +111,12 @@ public Action ZP_OnClientValidateExtraItem(int clientIndex, int extraitemIndex)
  * @brief Called after select an extraitem in the equipment menu.
  * 
  * @param clientIndex       The client index.
- * @param extraitemIndex    The item index.
+ * @param itemID            The item index.
  **/
-public void ZP_OnClientBuyExtraItem(int clientIndex, int extraitemIndex)
+public void ZP_OnClientBuyExtraItem(int clientIndex, int itemID)
 {
     // Check the item index
-    if(extraitemIndex == gItem)
+    if(itemID == gItem)
     {
         // Give item and select it
         ZP_GiveClientWeapon(clientIndex, gWeapon);
@@ -133,63 +133,23 @@ public void ZP_OnClientBuyExtraItem(int clientIndex, int extraitemIndex)
 public void ZP_OnGrenadeCreated(int clientIndex, int grenadeIndex, int weaponID)
 {
     // Validate custom grenade
-    if(weaponID == gWeapon) /* OR if(ZP_GetWeaponID(grenadeIndex) == gWeapon)*/
+    if(weaponID == gWeapon) /* OR if(GetEntProp(grenadeIndex, Prop_Data, "m_iHammerID") == gWeapon)*/
     {
         // Block grenade
         SetEntProp(grenadeIndex, Prop_Data, "m_nNextThinkTick", -1);
 
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound));
-        EmitSoundToAll(sSound, grenadeIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+        // Gets parent position
+        static float vPosition[3];
+        GetEntPropVector(grenadeIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
 
-        // Create an light_dynamic entity
-        int lightIndex = CreateEntityByName("light_dynamic");
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 1, grenadeIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
 
-        // If entity isn't valid, then skip
-        if(lightIndex != INVALID_ENT_REFERENCE)
-        {
-            // Dispatch main values of the entity
-            DispatchKeyValue(lightIndex, "inner_cone", "0");
-            DispatchKeyValue(lightIndex, "cone", "80");
-            DispatchKeyValue(lightIndex, "brightness", "1");
-            DispatchKeyValue(lightIndex, "pitch", "90");
-            DispatchKeyValue(lightIndex, "style", "5");
-            DispatchKeyValue(lightIndex, "_light", GRENADE_FLARE_COLOR);
-            DispatchKeyValueFloat(lightIndex, "distance", GRENADE_FLARE_DISTANCE);
-            DispatchKeyValueFloat(lightIndex, "spotlight_radius", GRENADE_FLARE_RADIUS);
+        // Create effects
+        UTIL_CreateLight(grenadeIndex, vPosition, _, _, _, _, _, _, _, GRENADE_FLARE_COLOR, GRENADE_FLARE_DISTANCE, GRENADE_FLARE_RADIUS, GRENADE_FLARE_DURATION);
+        UTIL_CreateParticle(grenadeIndex, vPosition, _, _, "smoking", GRENADE_FLARE_DURATION);
 
-            // Spawn the entity into the world
-            DispatchSpawn(lightIndex);
-
-            // Activate the entity
-            AcceptEntityInput(lightIndex, "TurnOn");
-
-            // Initialize vector variables
-            static float vPosition[3];
-            
-            // Gets parent position
-            GetEntPropVector(grenadeIndex, Prop_Send, "m_vecOrigin", vPosition);
-            
-            // Teleport the entity
-            TeleportEntity(lightIndex, vPosition, NULL_VECTOR, NULL_VECTOR);
-            
-            // Sets parent to the entity
-            SetVariantString("!activator"); 
-            AcceptEntityInput(lightIndex, "SetParent", grenadeIndex, lightIndex); 
-            SetEntPropEnt(lightIndex, Prop_Data, "m_pParent", grenadeIndex);
-
-            // Create an effect
-            ZP_CreateParticle(grenadeIndex, vPosition, _, "smoking", GRENADE_FLARE_DURATION);
-        }
-
-        // Initialize time char
-        static char sTime[SMALL_LINE_LENGTH];
-        FormatEx(sTime, sizeof(sTime), "OnUser1 !self:kill::%f:1", GRENADE_FLARE_DURATION);
-
-        // Sets modified flags on the entity
-        SetVariantString(sTime);
-        AcceptEntityInput(grenadeIndex, "AddOutput");
-        AcceptEntityInput(grenadeIndex, "FireUser1");
+        // Kill after some duration
+        UTIL_RemoveEntity(grenadeIndex, GRENADE_FLARE_DURATION);
     }
 }

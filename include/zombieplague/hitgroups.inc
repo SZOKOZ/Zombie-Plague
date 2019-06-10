@@ -11,11 +11,11 @@
  * 
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
  * details.
  *
  * You should have received a copy of the GNU General Public License along with
- * this program.  If not, see <http://www.gnu.org/licenses/>.
+ * this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * As a special exception, AlliedModders LLC gives you permission to link the
  * code of this program (as well as its derivative works) to "Half-Life 2," the
@@ -37,29 +37,14 @@
  * 
  * @param clientIndex       The client index.
  * @param attackerIndex     The attacker index. (Not validated!)
- * @param inflictorIndex    The inflictor index. (Not validated!)
+ * @param inflicterIndex    The inflicter index. (Not validated!)
  * @param damage            The amount of damage inflicted.
  * @param bits              The ditfield of damage types.
  * @param weaponIndex       The weapon index or -1 for unspecified.
  *
  * @noreturn
  **/
-forward void ZP_OnClientDamaged(int clientIndex, int &attackerIndex, int &inflictorIndex, float &damage, int &bits, int &weaponIndex);
-
-/**
- * @brief Applies core damage to an entity. 
- *
- * @param clientIndex       The client index.
- * @param attackerIndex     The attacker index.
- * @param damage            The amount of damage inflicted.
- * @param bits              (Optional) The ditfield of damage types. 
- * @param weaponIndex       (Optional) The weapon index or -1 for unspecified.
- *
- * @note Knockback will apply only on 'DMG_NEVERGIB' from the class and if the weapon index is state.
- *
- * @noreturn
- **/
-native void ZP_TakeDamage(int clientIndex, int attackerIndex, float damage, int bits = DMG_GENERIC, int weaponIndex = INVALID_ENT_REFERENCE);
+forward void ZP_OnClientDamaged(int clientIndex, int &attackerIndex, int &inflicterIndex, float &damage, int &bits, int &weaponIndex);
 
 /**
  * @brief Gets the amount of all hitgrups.

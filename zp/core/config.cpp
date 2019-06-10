@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -113,6 +113,7 @@
 #define CONFIG_FILE_ALIAS_EXTRAITEMS    "extraitems"    
 #define CONFIG_FILE_ALIAS_GAMEMODES     "gamemodes"
 #define CONFIG_FILE_ALIAS_CLASSES       "classes"
+#define CONFIG_FILE_ALIAS_LEVELS        "levels"
 /**
  * @endsection
  **/
@@ -130,6 +131,7 @@
 #define CONFIG_PATH_EXTRAITEMS          "zombieplague/extraitems.ini"    
 #define CONFIG_PATH_GAMEMODES           "zombieplague/gamemodes.ini"
 #define CONFIG_PATH_CLASSES             "zombieplague/classes.ini"
+#define CONFIG_PATH_LEVELS              "zombieplague/levels.ini"
 /**
  * @endsection
  **/
@@ -141,7 +143,7 @@ enum ConfigStructure
 {
     Structure_List,               /** Config is structured as a simple list of strings. */
     Structure_ArrayList,          /** Config is structured as an array list of strings. */
-    Structure_Keyvalue,           /** Config is a keyvalue structure */
+    Structure_Keyvalue            /** Config is a keyvalue structure */
 };
 /**
  * @endsection
@@ -162,7 +164,8 @@ enum ConfigFile
     File_Costumes,                /** <sourcemod root>/zombieplague/costumes.ini (default) */
     File_ExtraItems,              /** <sourcemod root>/zombieplague/extraitems.ini (default) */
     File_GameModes,               /** <sourcemod root>/zombieplague/gamemodes.ini (default) */
-    File_Classes                  /** <sourcemod root>/zombieplague/classes.ini (default) */
+    File_Classes,                 /** <sourcemod root>/zombieplague/classes.ini (default) */
+    File_Levels                   /** <sourcemod root>/zombieplague/levels.ini (default) */
 };
 /**
  * @endsection
@@ -197,7 +200,7 @@ enum ConfigKvAction
     KvAction_Create,    /** Creates a key. */
     KvAction_KVDelete,  /** Delete a key. */
     KvAction_KVSet,     /** Modify setting of a key. */
-    KvAction_KVGet,     /** Get setting of a key. */
+    KvAction_KVGet      /** Get setting of a key. */
 };
 /**
  * @endsection
@@ -214,28 +217,6 @@ void ConfigOnInit(/*void*/)
     gServerData.SDKTools = LoadGameConfigFile("sdktools.games");
     gServerData.CStrike  = LoadGameConfigFile("sm-cstrike.games");
 }
-
-/**
- * @brief Config module unload function.
- **/
-/*void ConfigOnUnload(void) 
-{
-    // Remove a gamedata configs
-    delete gServerData.Config;
-    delete gServerData.SDKHooks;
-    delete gServerData.SDKTools;
-    delete gServerData.CStrike;
-
-// i = config file entry index
-    for(int i = 0; i < sizeof(gConfigData); i++)
-    {
-        // Gets config file
-        Handle iFile = ConfigGetConfigHandle(view_as<ConfigFile>(i));
-
-        // Destroy all old data
-        ConfigClearKvArray(view_as<ArrayList>(iFile));
-    }
-}*/
 
 /**
  * @brief Creates commands for config module.
@@ -939,7 +920,7 @@ public Action ConfigReloadOnCommandCatched(int clientIndex, int iArguments)
         // Write syntax info
         TranslationReplyToCommand(clientIndex, "config reload");
         TranslationReplyToCommand(clientIndex, "config reload commands");
-        TranslationReplyToCommand(clientIndex, "config reload commands aliases", CONFIG_FILE_ALIAS_CVARS, CONFIG_FILE_ALIAS_DOWNLOADS, CONFIG_FILE_ALIAS_WEAPONS, CONFIG_FILE_ALIAS_SOUNDS, CONFIG_FILE_ALIAS_MENUS, CONFIG_FILE_ALIAS_HITGROUPS, CONFIG_FILE_ALIAS_COSTUMES, CONFIG_FILE_ALIAS_EXTRAITEMS, CONFIG_FILE_ALIAS_GAMEMODES, CONFIG_PATH_CLASSES);
+        TranslationReplyToCommand(clientIndex, "config reload commands aliases", CONFIG_FILE_ALIAS_CVARS, CONFIG_FILE_ALIAS_DOWNLOADS, CONFIG_FILE_ALIAS_WEAPONS, CONFIG_FILE_ALIAS_SOUNDS, CONFIG_FILE_ALIAS_MENUS, CONFIG_FILE_ALIAS_HITGROUPS, CONFIG_FILE_ALIAS_COSTUMES, CONFIG_FILE_ALIAS_EXTRAITEMS, CONFIG_FILE_ALIAS_GAMEMODES, CONFIG_PATH_CLASSES, CONFIG_PATH_LEVELS);
         return Plugin_Handled;
     }
 
@@ -1140,16 +1121,13 @@ public int ConfigMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int 
                 return;
             }
 
-            // Initialize variables
-            static char sAlias[SMALL_LINE_LENGTH];
-            static char sKey[SMALL_LINE_LENGTH];
-
             // Gets menu info
-            hMenu.GetItem(mSlot, sKey, sizeof(sKey));
-            ConfigFile iD = view_as<ConfigFile>(StringToInt(sKey));
+            static char sBuffer[SMALL_LINE_LENGTH];
+            hMenu.GetItem(mSlot, sBuffer, sizeof(sBuffer));
+            ConfigFile iD = view_as<ConfigFile>(StringToInt(sBuffer));
             
             // Gets config alias
-            ConfigGetConfigAlias(iD, sAlias, sizeof(sAlias));
+            ConfigGetConfigAlias(iD, sBuffer, sizeof(sBuffer));
             
             // Reloads config file
             bool bSuccessful = ConfigReloadConfig(iD);
@@ -1157,11 +1135,11 @@ public int ConfigMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int 
             // Validate load
             if(bSuccessful)
             {
-                TranslationPrintToChat(clientIndex, "config reload finish", sAlias);
+                TranslationPrintToChat(clientIndex, "config reload finish", sBuffer);
             }
             else
             {
-                TranslationPrintToChat(clientIndex, "config reload falied", sAlias);
+                TranslationPrintToChat(clientIndex, "config reload falied", sBuffer);
             }
             
             // Log action to game events

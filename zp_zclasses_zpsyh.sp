@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -42,17 +42,18 @@ public Plugin myinfo =
 }
 
 /**
- * @section Information about zombie class.
+ * @section Information about the zombie class.
  **/    
 #define ZOMBIE_CLASS_SKILL_RADIUS        250.0
-#define ZOMBIE_CLASS_SKILL_DAMAGE        1.0   // 10 per second    
+#define ZOMBIE_CLASS_SKILL_DAMAGE        1.0
 #define ZOMBIE_CLASS_SKILL_COLOR         {255, 0, 0, 200}
 /**
  * @endsection
  **/
 
 // Decal index
-int decalTrail; int decalHalo;
+int decalTrail;
+#pragma unused decalTrail
 
 // Timer index
 Handle Task_ZombieScream[MAXPLAYERS+1] = null; 
@@ -64,20 +65,6 @@ int gSound; ConVar hSoundLevel;
 // Zombie index
 int gZombie;
 #pragma unused gZombie
-
-/**
- * @brief Called after a library is added that the current plugin references optionally. 
- *        A library is either a plugin name or extension name, as exposed via its include file.
- **/
-public void OnLibraryAdded(const char[] sLibrary)
-{
-    // Validate library
-    if(!strcmp(sLibrary, "zombieplague", false))
-    {
-        // Hook player events
-        HookEvent("player_death", EventPlayerDeath, EventHookMode_Pre);
-    }
-}
 
 /**
  * @brief Called after a zombie core is loaded.
@@ -98,7 +85,6 @@ public void ZP_OnEngineExecute(/*void*/)
     
     // Models
     decalTrail = PrecacheModel("materials/sprites/laserbeam.vmt", true);
-    decalHalo  = PrecacheModel("materials/sprites/glow.vmt", true);  
 }
 
 /**
@@ -114,7 +100,6 @@ public void OnMapEnd(/*void*/)
     }
 }
 
-
 /**
  * @brief Called when a client is disconnecting from the server.
  *
@@ -127,17 +112,15 @@ public void OnClientDisconnect(int clientIndex)
 }
 
 /**
- * Event callback (player_death)
- * @brief Client has been killed.
+ * @brief Called when a client has been killed.
  * 
- * @param gEventHook        The event handle.
- * @param gEventName        The name of the event.
- * @param dontBroadcast     If true, event is broadcasted to all clients, false if not.
+ * @param clientIndex       The client index.
+ * @param attackerIndex     The attacker index.
  **/
-public Action EventPlayerDeath(Event hEvent, char[] sName, bool dontBroadcast) 
+public void ZP_OnClientDeath(int clientIndex, int attackerIndex)
 {
     // Delete timer
-    delete Task_ZombieScream[GetClientOfUserId(hEvent.GetInt("userid"))];
+    delete Task_ZombieScream[clientIndex];
 }
 
 /**
@@ -169,15 +152,13 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
         delete Task_ZombieScream[clientIndex];
         Task_ZombieScream[clientIndex] = CreateTimer(0.1, ClientOnScreaming, GetClientUserId(clientIndex), TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound));
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 1, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
         
         // Create effect
         static float vPosition[3];
-        GetClientAbsOrigin(clientIndex, vPosition);
-        ZP_CreateParticle(clientIndex, vPosition, _, "hell_end", ZP_GetClassSkillDuration(gZombie));
+        GetEntPropVector(clientIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
+        UTIL_CreateParticle(clientIndex, vPosition, _, _, "hell_end", ZP_GetClassSkillDuration(gZombie));
     }
     
     // Allow usage
@@ -213,37 +194,17 @@ public Action ClientOnScreaming(Handle hTimer, int userID)
     // Validate client
     if(clientIndex)
     {
-        // Initialize vectors
-        static float vEntPosition[3]; static float vVictimPosition[3];
-
         // Gets client origin
-        GetClientAbsOrigin(clientIndex, vEntPosition); vEntPosition[2] += 25.0;
+        static float vPosition[3];
+        GetEntPropVector(clientIndex, Prop_Data, "m_vecAbsOrigin", vPosition); vPosition[2] += 25.0;  
 
-        // i = client index
-        for(int i = 1; i <= MaxClients; i++)
-        {
-            // Validate human
-            if(IsPlayerExist(i) && ZP_IsPlayerHuman(i))
-            {
-                // Gets victim origin
-                GetClientAbsOrigin(i, vVictimPosition);
-
-                // Calculate the distance
-                float flDistance = GetVectorDistance(vEntPosition, vVictimPosition);
-
-                // Validate distance
-                if(flDistance <= ZOMBIE_CLASS_SKILL_RADIUS)
-                {            
-                    // Apply damage
-                    ZP_TakeDamage(i, clientIndex, ZOMBIE_CLASS_SKILL_DAMAGE * (1.0 - (flDistance / ZOMBIE_CLASS_SKILL_RADIUS)), DMG_SONIC);
-                }
-            }
-        }
-
+        // Create the damage for victims
+        UTIL_CreateDamage(_, vPosition, clientIndex, ZOMBIE_CLASS_SKILL_DAMAGE, ZOMBIE_CLASS_SKILL_RADIUS, DMG_SONIC);
+            
         // Create a beamring effect               <Diameter>
-        TE_SetupBeamRingPoint(vEntPosition, 50.0, ZOMBIE_CLASS_SKILL_RADIUS * 2.0, decalTrail, decalHalo, 1, 10, 1.0, 15.0, 0.0, ZOMBIE_CLASS_SKILL_COLOR, 50, 0);
-        TE_SendToAllInRange(vEntPosition, RangeType_Visibility);
-
+        TE_SetupBeamRingPoint(vPosition, 50.0, ZOMBIE_CLASS_SKILL_RADIUS * 2.0, decalTrail, 0, 1, 10, 1.0, 15.0, 0.0, ZOMBIE_CLASS_SKILL_COLOR, 50, 0);
+        TE_SendToAll();
+        
         // Allow timer
         return Plugin_Continue;
     }

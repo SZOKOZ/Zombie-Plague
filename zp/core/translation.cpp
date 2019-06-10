@@ -20,18 +20,9 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
- **/
-
-/**
- * @section Max length of different message formats.
- **/
-#define CHAT_LINE_LENGTH 192
-#define CONSOLE_LINE_LENGTH 1024
-/**
- * @endsection
  **/
 
 /**
@@ -189,7 +180,7 @@ stock void TranslationPrintHintText(int clientIndex, any ...)
         VFormat(sTranslation, CHAT_LINE_LENGTH, "%t", 2);
 
         // Print translated phrase to the client screen
-        VEffectsHintClientScreen(clientIndex, sTranslation);
+        UTIL_CreateClientHint(clientIndex, sTranslation);
     }
 }
 
@@ -220,7 +211,7 @@ stock void TranslationPrintHintTextAll(any ...)
             VFormat(sTranslation, CHAT_LINE_LENGTH, "%t", 1);
             
             // Print translated phrase to the client screen
-            VEffectsHintClientScreen(i, sTranslation);
+            UTIL_CreateClientHint(i, sTranslation);
         }
     }
 }
@@ -256,7 +247,7 @@ stock void TranslationPrintHudText(Handle hSync, int clientIndex, float x, float
         VFormat(sTranslation, CHAT_LINE_LENGTH, "%t", 14);
 
         // Print translated phrase to the client screen
-        VEffectsHudClientScreen(hSync, clientIndex, x, y, holdTime, r, g, b, a, effect, fxTime, fadeIn, fadeOut, sTranslation);
+        UTIL_CreateClientHud(hSync, clientIndex, x, y, holdTime, r, g, b, a, effect, fxTime, fadeIn, fadeOut, sTranslation);
     }
 }
 
@@ -299,7 +290,7 @@ stock void TranslationPrintHudTextAll(Handle hSync, float x, float y, float hold
             VFormat(sTranslation, CHAT_LINE_LENGTH, "%t", 13);
 
             // Print translated phrase to the client screen
-            VEffectsHudClientScreen(hSync, i, x, y, holdTime, r, g, b, a, effect, fxTime, fadeIn, fadeOut, sTranslation);
+            UTIL_CreateClientHud(hSync, i, x, y, holdTime, r, g, b, a, effect, fxTime, fadeIn, fadeOut, sTranslation);
         }
     }
 }

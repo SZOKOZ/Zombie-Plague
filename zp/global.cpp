@@ -20,98 +20,87 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
 
 /**
- * @section Core static macroses.
- **/
-#define SMALL_LINE_LENGTH       32
-#define NORMAL_LINE_LENGTH      64
-#define BIG_LINE_LENGTH         128
-#define CHAT_LINE_LENGTH        192
-#define PLATFORM_LINE_LENGTH    256
-#define HUGE_LINE_LENGTH        512
-#define CONSOLE_LINE_LENGTH     1024
-#define FILE_LINE_LENGTH        2048
-#define TEAM_NONE               0    /**< No team yet */
-#define TEAM_SPECTATOR          1    /**< Spectators */
-#define TEAM_ZOMBIE             2    /**< Zombies */
-#define TEAM_HUMAN              3    /**< Humans */
-#define SPECMODE_NONE           0
-#define SPECMODE_FIRSTPERSON    4
-#define SPECMODE_3RDPERSON      5
-#define SPECMODE_FREELOOK       6
-/**
- * @endsection
- **/
-
-/**
  * @section Variables to store offset values.
  **/
-int g_iOffset_PlayerVelocity;
-int g_iOffset_PlayerLMV;
-int g_iOffset_PlayerNightVisionOn;
-int g_iOffset_PlayerHasNightVision;
-int g_iOffset_PlayerHasDefuser;
-int g_iOffset_PlayerFov;
-int g_iOffset_PlayerDefaultFOV;
-int g_iOffset_PlayerAccount;
-int g_iOffset_PlayerSpotted;
-int g_iOffset_PlayerSpottedByMask;
-int g_iOffset_PlayerCanBeSpotted;
-int g_iOffset_PlayerDetected;
-int g_iOffset_PlayerHUD;
-int g_iOffset_PlayerHitGroup;
-int g_iOffset_PlayerArmor;
-int g_iOffset_PlayerHasHeavyArmor;
-int g_iOffset_PlayerHasHelmet;
-int g_iOffset_PlayerHealth;
-int g_iOffset_PlayerMaxHealth;
-int g_iOffset_PlayerGravity;
-int g_iOffset_PlayerFrags;
-int g_iOffset_PlayerDeath;
-int g_iOffset_PlayerCollision;
-int g_iOffset_PlayerRagdoll;
-int g_iOffset_PlayerViewModel;
-int g_iOffset_PlayerActiveWeapon;
-int g_iOffset_PlayerLastWeapon;
-int g_iOffset_PlayerObserverMode;
-int g_iOffset_PlayerObserverTarget;
-int g_iOffset_PlayerAttack;
-int g_iOffset_PlayerArms;
-int g_iOffset_PlayerAddonBits;
-int g_iOffset_EntityModelIndex;
-int g_iOffset_EntityOwnerEntity;
-int g_iOffset_EntityTeam;
-int g_iOffset_EntityEffects;
-int g_iOffset_EntityOrigin;
-int g_iOffset_WeaponID;
-int g_iOffset_WeaponOwner;
-int g_iOffset_WeaponWorldModel;
-int g_iOffset_WeaponWorldSkin;
-int g_iOffset_WeaponBody;
-int g_iOffset_WeaponSkin;
-int g_iOffset_WeaponAmmoType;
-int g_iOffset_WeaponClip1;
-int g_iOffset_WeaponReserve1;
-int g_iOffset_WeaponReserve2;
-int g_iOffset_WeaponPrimaryAttack;
-int g_iOffset_WeaponSecondaryAttack;
-int g_iOffset_WeaponIdle;
-int g_iOffset_CharacterWeapons;
-int g_iOffset_GrenadeThrower;
-int g_iOffset_ViewModelOwner;
-int g_iOffset_ViewModelWeapon;
-int g_iOffset_ViewModelSequence;
-int g_iOffset_ViewModelPlaybackRate;
-int g_iOffset_ViewModelIndex;
-int g_iOffset_ViewModelIgnoreOffsAcc;
-int g_iOffset_EconItemDefinitionIndex;
-int g_iOffset_NewSequenceParity;
+int g_iOffset_Velocity;
+int g_iOffset_Origin;
+int g_iOffset_Angles;
+int g_iOffset_LMV;
+int g_iOffset_Render;
+int g_iOffset_NightVisionOn;
+int g_iOffset_HasNightVision;
+int g_iOffset_HasDefuser;
+int g_iOffset_Fov;
+int g_iOffset_DefaultFOV;
+int g_iOffset_Account;
+int g_iOffset_Spotted;
+int g_iOffset_SpottedByMask;
+int g_iOffset_CanBeSpotted;
+int g_iOffset_Detected;
+int g_iOffset_HUD;
+int g_iOffset_HitGroup;
+int g_iOffset_Armor;
+int g_iOffset_HasHeavyArmor;
+int g_iOffset_HasHelmet;
+int g_iOffset_Health;
+int g_iOffset_MaxHealth;
+int g_iOffset_Gravity;
+int g_iOffset_Frags;
+int g_iOffset_Death;
+int g_iOffset_Collision;
+int g_iOffset_Ragdoll;
+int g_iOffset_Model;
+int g_iOffset_ActiveWeapon;
+int g_iOffset_MyWeapons;
+int g_iOffset_ObserverMode;
+int g_iOffset_ObserverTarget;
+int g_iOffset_Attack;
+int g_iOffset_Arms;
+int g_iOffset_AddonBits;
+int g_iOffset_ShotsFired;
+int g_iOffset_Direction;
+int g_iOffset_ModelIndex;
+int g_iOffset_OwnerEntity;
+int g_iOffset_Team;
+int g_iOffset_Effects;
+int g_iOffset_Effect;
+int g_iOffset_Body;
+int g_iOffset_Skin;
+int g_iOffset_LightingOrigin;
+int g_iOffset_Activator;
+int g_iOffset_HammerID;
+int g_iOffset_Owner;
+int g_iOffset_WorldModel;
+int g_iOffset_WorldSkin;
+int g_iOffset_AmmoType;
+int g_iOffset_Clip1;
+int g_iOffset_Clip2;
+int g_iOffset_Reserve1;
+int g_iOffset_Reserve2;
+int g_iOffset_PrimaryAttack;
+int g_iOffset_SecondaryAttack;
+int g_iOffset_TimeIdle;
 int g_iOffset_LastShotTime;
+int g_iOffset_RecoilIndex;
+int g_iOffset_SwitchingSilencer;
+int g_iOffset_SilencerOn;
+int g_iOffset_GrenadeThrower;
+int g_iOffset_ModelOwner;
+int g_iOffset_ModelWeapon;
+int g_iOffset_ModelSequence;
+int g_iOffset_ModelPlaybackRate;
+int g_iOffset_ModelViewIndex;
+int g_iOffset_ModelIgnoreOffsAcc;
+int g_iOffset_ItemDefinitionIndex;
+int g_iOffset_ItemDefinition;
+int g_iOffset_NewSequenceParity;
+int g_iOffset_LagCompensation;
 /**
  * @endsection
  **/
@@ -168,10 +157,10 @@ enum struct ServerData
     Database DataBase;
     
     /* Synchronizers */
-    Handle Account;
-    Handle Level;
-    Handle Game;
-    Handle Skill[2];
+    Handle LevelSync;
+    Handle AccountSync;
+    Handle GameSync;
+    Handle SkillSync[2];
     
     /* Configs */
     ArrayList ExtraItems;
@@ -186,6 +175,7 @@ enum struct ServerData
     ArrayList Weapons;
     ArrayList Downloads;
     ArrayList Sounds;
+    ArrayList Levels;
     
     /**
      * @brief Clear all timers.
@@ -230,7 +220,13 @@ enum struct ClientData
     int Costume;
     bool Vision;
     int Time;
+    int LastID;
+    int LastAttacker;
+    int LastKnife;
+    float HealthDuration;
     int AttachmentCostume;
+    int AttachmentHealth;
+    int AttachmentController;
     int AttachmentBits;
     int AttachmentAddons[11]; /* Amount of weapon back attachments */
     
@@ -238,12 +234,13 @@ enum struct ClientData
     int ViewModels[2];
     int IndexWeapon;
     int CustomWeapon;
+    int LastWeapon;
     int SwapWeapon;
     int LastSequence;
     int DrawSequence;
     bool ToggleSequence;
     int LastSequenceParity;
-    int DamageID;
+    bool RunCmd;
     
     /* Timers */
     Handle LevelTimer;
@@ -253,8 +250,10 @@ enum struct ClientData
     Handle BarTimer;
     Handle CounterTimer;
     Handle HealTimer;
+    Handle SpriteTimer;
     Handle MoanTimer;
     Handle AmbientTimer;
+    Handle BuyTimer;
     
     /* Arrays */
     ArrayList ShoppingCart;
@@ -284,7 +283,13 @@ enum struct ClientData
         this.Costume              = -1;
         this.Vision               = true;
         this.Time                 = 0;
+        this.LastID               = -1;
+        this.LastAttacker         = 0;
+        this.LastKnife            = INVALID_ENT_REFERENCE;
+        this.HealthDuration       = 0.0;
         this.AttachmentCostume    = INVALID_ENT_REFERENCE;
+        this.AttachmentHealth     = INVALID_ENT_REFERENCE;
+        this.AttachmentController = INVALID_ENT_REFERENCE;
         this.AttachmentBits       = 0;
         this.AttachmentAddons[0]  = INVALID_ENT_REFERENCE;
         this.AttachmentAddons[1]  = INVALID_ENT_REFERENCE; 
@@ -301,12 +306,13 @@ enum struct ClientData
         this.ViewModels[1]        = INVALID_ENT_REFERENCE;
         this.IndexWeapon          = INVALID_ENT_REFERENCE;
         this.CustomWeapon         = INVALID_ENT_REFERENCE;
+        this.LastWeapon           = INVALID_ENT_REFERENCE;
         this.SwapWeapon           = INVALID_ENT_REFERENCE;
         this.LastSequence         = -1;
         this.DrawSequence         = -1;
         this.ToggleSequence       = false;
         this.LastSequenceParity   = -1;
-        this.DamageID             = -1;
+        this.RunCmd               = false;
        
         delete this.ShoppingCart;
         delete this.ItemLimit;
@@ -325,8 +331,10 @@ enum struct ClientData
         delete this.BarTimer;
         delete this.CounterTimer;
         delete this.HealTimer;
+        delete this.SpriteTimer;
         delete this.MoanTimer;
         delete this.AmbientTimer;
+        delete this.BuyTimer;
     }
     
     /**
@@ -334,15 +342,17 @@ enum struct ClientData
      **/
     void PurgeTimers(/*void*/)
     {
-        this.LevelTimer     = null;
-        this.AccountTimer   = null;
-        this.RespawnTimer   = null;
-        this.SkillTimer     = null;
-        this.BarTimer       = null;
-        this.CounterTimer   = null;
-        this.HealTimer      = null;    
-        this.MoanTimer      = null; 
-        this.AmbientTimer   = null; 
+        this.LevelTimer   = null;
+        this.AccountTimer = null;
+        this.RespawnTimer = null;
+        this.SkillTimer   = null;
+        this.BarTimer     = null;
+        this.CounterTimer = null;
+        this.HealTimer    = null;
+        this.SpriteTimer  = null;
+        this.MoanTimer    = null; 
+        this.AmbientTimer = null; 
+        this.BuyTimer     = null;
     }
 }
 /**
@@ -357,7 +367,8 @@ ClientData gClientData[MAXPLAYERS+1];
 /**
  * @section Core useful functions.
  **/
-#define hasLength(%0) (%0[0] != '\0') 
+#define _call.%0(%1)  RequestFrame(view_as<RequestFrameCallback>(%0), GetClientUserId(%1))
+#define _next.%0(%1)  RequestFrame(view_as<RequestFrameCallback>(%0), EntIndexToEntRef(%1))
 /**
  * @endsection
  **/
@@ -372,4 +383,5 @@ public void OnEntityCreated(int entityIndex, const char[] sClassname)
 {
     // Forward event to modules
     WeaponOnEntityCreated(entityIndex, sClassname);
+    HitGroupsOnEntityCreated(entityIndex, sClassname);
 }

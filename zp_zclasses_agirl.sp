@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -42,7 +42,7 @@ public Plugin myinfo =
 }
 
 /**
- * @section Information about zombie class.
+ * @section Information about the zombie class.
  **/
 #define ZOMBIE_CLASS_SKILL_SPEED        3000.0
 #define ZOMBIE_CLASS_SKILL_GRAVITY      0.01
@@ -55,7 +55,6 @@ public Plugin myinfo =
 #define ZOMBIE_CLASS_SKILL_DURATION_F   0.3
 #define ZOMBIE_CLASS_SKILL_TIME_F       1.0
 #define ZOMBIE_CLASS_SKILL_FIRE         10.0
-
 /**
  * @endsection
  **/
@@ -111,20 +110,15 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
         // Gets client speed
         GetEntPropVector(clientIndex, Prop_Data, "m_vecVelocity", vVelocity);
         
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound), 1);
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 1, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
         
         // Create a bomb entity
-        int entityIndex = CreateEntityByName("hegrenade_projectile");
+        int entityIndex = UTIL_CreateProjectile(vPosition, vAngle);
         
         // Validate entity
         if(entityIndex != INVALID_ENT_REFERENCE)
         {
-            // Spawn the entity
-            DispatchSpawn(entityIndex);
-            
             // Sets bomb model scale
             SetEntPropFloat(entityIndex, Prop_Send, "m_flModelScale", 0.0);
             
@@ -141,7 +135,7 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
             AddVectors(vEntVelocity, vVelocity, vEntVelocity);
 
             // Push the bomb
-            TeleportEntity(entityIndex, vPosition, vAngle, vEntVelocity);
+            TeleportEntity(entityIndex, NULL_VECTOR, NULL_VECTOR, vEntVelocity);
 
             // Sets parent for the entity
             SetEntPropEnt(entityIndex, Prop_Data, "m_pParent", clientIndex); 
@@ -152,10 +146,10 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
             SetEntPropFloat(entityIndex, Prop_Data, "m_flGravity", ZOMBIE_CLASS_SKILL_GRAVITY); 
 
             // Put fire on it
-            IgniteEntity(entityIndex, ZOMBIE_CLASS_SKILL_FIRE);
+            UTIL_IgniteEntity(entityIndex, ZOMBIE_CLASS_SKILL_FIRE);
             
             // Create an effect
-            ZP_CreateParticle(entityIndex, vPosition, _, "gamma_trail_xz", 5.0);
+            UTIL_CreateParticle(entityIndex, vPosition, _, _, "gamma_trail_xz", 5.0);
     
             // Create touch hook
             SDKHook(entityIndex, SDKHook_Touch, BombTouchHook);
@@ -174,67 +168,45 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
  **/
 public Action BombTouchHook(int entityIndex, int targetIndex)
 {
-    // Validate entity
-    if(IsValidEdict(entityIndex))
+    // Validate target
+    if(IsValidEdict(targetIndex))
     {
-        // Validate target
-        if(IsValidEdict(targetIndex))
+        // Validate thrower
+        if(GetEntPropEnt(entityIndex, Prop_Send, "m_hThrower") == targetIndex)
         {
-            // Validate thrower
-            if(GetEntPropEnt(entityIndex, Prop_Send, "m_hThrower") == targetIndex)
-            {
-                // Return on the unsuccess
-                return Plugin_Continue;
-            }
-
-            // Initialize vectors
-            static float vEntPosition[3]; static float vVictimPosition[3];
-
-            // Gets entity position
-            GetEntPropVector(entityIndex, Prop_Send, "m_vecOrigin", vEntPosition);
-
-            // Create a info_target entity
-            int infoIndex = ZP_CreateEntity(vEntPosition, ZOMBIE_CLASS_SKILL_EXP_TIME);
-
-            // Validate entity
-            if(IsValidEdict(infoIndex))
-            {
-                // Create an explosion effect
-                ZP_CreateParticle(infoIndex, vEntPosition, _, "explosion_hegrenade_interior", ZOMBIE_CLASS_SKILL_EXP_TIME);
-                
-                // Emit sound
-                static char sSound[PLATFORM_LINE_LENGTH];
-                ZP_GetSound(gSound, sSound, sizeof(sSound), 2);
-                EmitSoundToAll(sSound, infoIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
-            }
-
-            // Remove entity from world
-            AcceptEntityInput(entityIndex, "Kill");
-
-            // i = client index
-            for(int i = 1; i <= MaxClients; i++)
-            {
-                // Validate client
-                if(IsPlayerExist(i) && ZP_IsPlayerHuman(i))
-                {
-                    // Gets victim origin
-                    GetClientAbsOrigin(i, vVictimPosition);
-
-                    // Calculate the distance
-                    float flDistance = GetVectorDistance(vEntPosition, vVictimPosition);
-
-                    // Validate distance
-                    if(flDistance <= ZOMBIE_CLASS_SKILL_EXP_RADIUS)
-                    {
-                        // Simple droping of the weapon
-                        FakeClientCommandEx(i, "drop");
-    
-                        // Create an fade
-                        ZP_CreateFadeScreen(i, ZOMBIE_CLASS_SKILL_DURATION_F, ZOMBIE_CLASS_SKILL_TIME_F, 0x0001, ZOMBIE_CLASS_SKILL_COLOR_F);
-                    }
-                }
-            }
+            // Return on the unsuccess
+            return Plugin_Continue;
         }
+
+        // Gets entity position
+        static float vPosition[3];
+        GetEntPropVector(entityIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
+        
+        // Create an explosion effect
+        UTIL_CreateParticle(_, vPosition, _, _, "pyrovision_explosion", ZOMBIE_CLASS_SKILL_EXP_TIME);
+        
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 2, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+
+        // Find any players in the radius
+        int i; int it = 1; /// iterator
+        while((i = ZP_FindPlayerInSphere(it, vPosition, ZOMBIE_CLASS_SKILL_EXP_RADIUS)) != INVALID_ENT_REFERENCE)
+        {
+            // Skip zombies
+            if(ZP_IsPlayerZombie(i))
+            {
+                continue;
+            }
+
+            // Simple droping of the weapon
+            FakeClientCommandEx(i, "drop");
+
+            // Create an fade
+            UTIL_CreateFadeScreen(i, ZOMBIE_CLASS_SKILL_DURATION_F, ZOMBIE_CLASS_SKILL_TIME_F, FFADE_IN, ZOMBIE_CLASS_SKILL_COLOR_F);
+        }
+
+        // Remove entity from world
+        AcceptEntityInput(entityIndex, "Kill");
     }
 
     // Return on the success

@@ -20,29 +20,37 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
  
 /**
- * Maximum cash limit in CS:GO.
- **/
-#define ACCOUNT_CASH_MAX 65000
+ * @section Account types.
+ **/ 
+enum /*AccountType*/
+{
+    AccountType_Disabled,
+    AccountType_Classic,
+    AccountType_Custom
+}
+/**
+ * @endsection
+ **/   
 
 /**
  * @brief Account module init function.
  **/
 void AccountOnInit(/*void*/)
 {
-    // If account disabled, then stop
-    if(!gCvarList[CVAR_ACCOUNT_MONEY].BoolValue)
+    // If custom disabled, then remove hud
+    if(gCvarList[CVAR_ACCOUNT_MONEY].IntValue != AccountType_Custom)
     {
         // Validate loaded map
         if(gServerData.MapLoaded)
         {
             // Validate sync
-            if(gServerData.Account != null)
+            if(gServerData.AccountSync != null)
             {
                 // i = client index
                 for(int i = 1; i <= MaxClients; i++)
@@ -56,16 +64,19 @@ void AccountOnInit(/*void*/)
                 }
                 
                 // Remove sync
-                delete gServerData.Account;
+                delete gServerData.AccountSync;
             }
         }
-        return;
     }
-
-    // Creates a HUD synchronization object
-    if(gServerData.Account == null)
+    
+    // If custom enabled, then create sync
+    if(gCvarList[CVAR_ACCOUNT_MONEY].IntValue == AccountType_Custom)
     {
-        gServerData.Account = CreateHudSynchronizer();
+        // Creates a HUD synchronization object
+        if(gServerData.AccountSync == null)
+        {
+            gServerData.AccountSync = CreateHudSynchronizer();
+        }
     }
     
     // Validate loaded map
@@ -75,10 +86,10 @@ void AccountOnInit(/*void*/)
         for(int i = 1; i <= MaxClients; i++)
         {
             // Validate client
-            if(IsPlayerExist(i))
+            if(IsPlayerExist(i, false))
             {
                 // Enable account system
-                AccountOnClientUpdate(GetClientUserId(i));
+                _call.AccountOnClientUpdate(i);
             }
         }
     }
@@ -102,6 +113,7 @@ void AccountOnCvarInit(/*void*/)
     // Create cvars
     gCvarList[CVAR_ACCOUNT_CASH_AWARD]   = FindConVar("mp_playercashawards");
     gCvarList[CVAR_ACCOUNT_BUY_ANYWHERE] = FindConVar("mp_buy_anywhere");
+    gCvarList[CVAR_ACCOUNT_BUY_IMMUNITY] = FindConVar("mp_buy_during_immunity");
     gCvarList[CVAR_ACCOUNT_MONEY]        = FindConVar("zp_account_money");
     gCvarList[CVAR_ACCOUNT_CONNECT]      = FindConVar("zp_account_connect");
     gCvarList[CVAR_ACCOUNT_BET]          = FindConVar("zp_account_bet");
@@ -116,12 +128,14 @@ void AccountOnCvarInit(/*void*/)
     
     // Sets locked cvars to their locked values
     gCvarList[CVAR_ACCOUNT_CASH_AWARD].IntValue   = 0;
-    gCvarList[CVAR_ACCOUNT_BUY_ANYWHERE].IntValue = 0;
+    gCvarList[CVAR_ACCOUNT_BUY_ANYWHERE].IntValue = 1;
+    gCvarList[CVAR_ACCOUNT_BUY_IMMUNITY].IntValue = 0;
     
     // Hook cvars
     HookConVarChange(gCvarList[CVAR_ACCOUNT_MONEY],        AccountOnCvarHook); 
     HookConVarChange(gCvarList[CVAR_ACCOUNT_CASH_AWARD],   CvarsLockOnCvarHook);
-    HookConVarChange(gCvarList[CVAR_ACCOUNT_BUY_ANYWHERE], CvarsLockOnCvarHook);
+    HookConVarChange(gCvarList[CVAR_ACCOUNT_BUY_ANYWHERE], CvarsUnlockOnCvarHook);
+    HookConVarChange(gCvarList[CVAR_ACCOUNT_BUY_IMMUNITY], CvarsLockOnCvarHook);
 }
 
 /**
@@ -152,7 +166,7 @@ public void AccountOnCvarHook(ConVar hConVar, char[] oldValue, char[] newValue)
 void AccountOnClientSpawn(int clientIndex)
 {
     // Reset HUD on the team change
-    AccountOnClientUpdate(GetClientUserId(clientIndex));
+    _call.AccountOnClientUpdate(clientIndex);
 }
 
 /**
@@ -163,7 +177,7 @@ void AccountOnClientSpawn(int clientIndex)
 void AccountOnClientDeath(int clientIndex)
 {
     // Enable HUD for spectator
-    AccountOnClientUpdate(GetClientUserId(clientIndex));
+    _call.AccountOnClientUpdate(clientIndex);
 }
 
 /**
@@ -173,12 +187,6 @@ void AccountOnClientDeath(int clientIndex)
  **/
 public void AccountOnClientUpdate(int userID)
 {
-    // If account disabled, then stop
-    if(!gCvarList[CVAR_ACCOUNT_MONEY].BoolValue)
-    {
-        return;
-    }
-    
     // Gets client index from the user ID
     int clientIndex = GetClientOfUserId(userID);
 
@@ -188,23 +196,33 @@ public void AccountOnClientUpdate(int userID)
         // Validate real client
         if(!IsFakeClient(clientIndex))
         {
-            // If value higher or client is spectator, then create custom HUD
-            if(gClientData[clientIndex].Money > ACCOUNT_CASH_MAX || !IsPlayerAlive(clientIndex))
+            // Manipulate with account type
+            delete gClientData[clientIndex].AccountTimer;
+            switch(gCvarList[CVAR_ACCOUNT_MONEY].IntValue)
             {
-                // Send a convar to the client
-                gCvarList[CVAR_ACCOUNT_CASH_AWARD].ReplicateToClient(clientIndex, "0");
-
-                // Sets timer for player account HUD
-                delete gClientData[clientIndex].AccountTimer;
-                gClientData[clientIndex].AccountTimer = CreateTimer(1.0, AccountOnClientHUD, GetClientUserId(clientIndex), TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-            }
-            else
-            {
-                // Send a convar to the client
-                gCvarList[CVAR_ACCOUNT_CASH_AWARD].ReplicateToClient(clientIndex, "1");
+                case AccountType_Disabled : 
+                {
+                    // Hide money bar panel
+                    gCvarList[CVAR_ACCOUNT_CASH_AWARD].ReplicateToClient(clientIndex, "0");
+                }
                 
-                // Update client moeny
-                AccountSetMoney(clientIndex, gClientData[clientIndex].Money);
+                case AccountType_Classic : 
+                {
+                    // Show money bar panel
+                    gCvarList[CVAR_ACCOUNT_CASH_AWARD].ReplicateToClient(clientIndex, "1");
+                    
+                    // Update client money
+                    AccountSetMoney(clientIndex, gClientData[clientIndex].Money);
+                }
+                
+                case AccountType_Custom : 
+                {
+                    // Hide money bar panel
+                    gCvarList[CVAR_ACCOUNT_CASH_AWARD].ReplicateToClient(clientIndex, "0");
+                    
+                    // Sets timer for player account HUD
+                    gClientData[clientIndex].AccountTimer = CreateTimer(1.0, AccountOnClientHUD, GetClientUserId(clientIndex), TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+                }
             }
         }
     }
@@ -231,7 +249,7 @@ public Action AccountOnClientHUD(Handle hTimer, int userID)
         if(!IsPlayerAlive(clientIndex))
         {
             // Validate spectator mode
-            int iSpecMode = ToolsGetClientObserverMode(clientIndex);
+            int iSpecMode = ToolsGetObserverMode(clientIndex);
             if(iSpecMode != SPECMODE_FIRSTPERSON && iSpecMode != SPECMODE_3RDPERSON)
             {
                 // Allow timer
@@ -239,7 +257,7 @@ public Action AccountOnClientHUD(Handle hTimer, int userID)
             }
             
             // Gets the observer target
-            targetIndex = ToolsGetClientObserverTarget(clientIndex);
+            targetIndex = ToolsGetObserverTarget(clientIndex);
             
             // Validate target
             if(!IsPlayerExist(targetIndex)) 
@@ -250,7 +268,7 @@ public Action AccountOnClientHUD(Handle hTimer, int userID)
         }
         
         // Print hud text to the client
-        TranslationPrintHudText(gServerData.Account, clientIndex, gCvarList[CVAR_ACCOUNT_HUD_X].FloatValue, gCvarList[CVAR_ACCOUNT_HUD_Y].FloatValue, 1.1, gCvarList[CVAR_ACCOUNT_HUD_R].IntValue, gCvarList[CVAR_ACCOUNT_HUD_G].IntValue, gCvarList[CVAR_ACCOUNT_HUD_B].IntValue, gCvarList[CVAR_ACCOUNT_HUD_A].IntValue, 0, 0.0, 0.0, 0.0, "account info", "money", gClientData[targetIndex].Money);
+        TranslationPrintHudText(gServerData.AccountSync, clientIndex, gCvarList[CVAR_ACCOUNT_HUD_X].FloatValue, gCvarList[CVAR_ACCOUNT_HUD_Y].FloatValue, 1.1, gCvarList[CVAR_ACCOUNT_HUD_R].IntValue, gCvarList[CVAR_ACCOUNT_HUD_G].IntValue, gCvarList[CVAR_ACCOUNT_HUD_B].IntValue, gCvarList[CVAR_ACCOUNT_HUD_A].IntValue, 0, 0.0, 0.0, 0.0, "account info", "money", gClientData[targetIndex].Money);
 
         // Allow timer
         return Plugin_Continue;
@@ -426,40 +444,13 @@ void AccountSetClientCash(int clientIndex, int iMoney)
     DataBaseOnClientUpdate(clientIndex, ColumnType_Money);
 
     // If account disabled, then stop
-    if(!gCvarList[CVAR_ACCOUNT_MONEY].BoolValue)
+    if(gCvarList[CVAR_ACCOUNT_MONEY].IntValue != AccountType_Classic)
     {
         return;
     }
     
-    // If value higher, then create custom HUD
-    if(iMoney > ACCOUNT_CASH_MAX)
-    {
-        // Validate timer
-        if(gClientData[clientIndex].AccountTimer == null)
-        {
-            // Send a convar to the client
-            gCvarList[CVAR_ACCOUNT_CASH_AWARD].ReplicateToClient(clientIndex, "0");
-  
-            // Sets timer for player account HUD
-            delete gClientData[clientIndex].AccountTimer;
-            gClientData[clientIndex].AccountTimer = CreateTimer(1.0, AccountOnClientHUD, GetClientUserId(clientIndex), TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-        }
-    }
-    else
-    {
-        // Validate timer
-        if(gClientData[clientIndex].AccountTimer != null)
-        {
-            // Remove timer
-            delete gClientData[clientIndex].AccountTimer;
-            
-            // Send a convar to the client
-            gCvarList[CVAR_ACCOUNT_CASH_AWARD].ReplicateToClient(clientIndex, "1");
-        }
-        
-        // Update client moeny
-        AccountSetMoney(clientIndex, gClientData[clientIndex].Money);
-    }
+    // Update client money
+    AccountSetMoney(clientIndex, gClientData[clientIndex].Money);
 }
 
 /**
@@ -470,7 +461,7 @@ void AccountSetClientCash(int clientIndex, int iMoney)
  **/
 void AccountSetMoney(int clientIndex, int iMoney)
 {
-    SetEntData(clientIndex, g_iOffset_PlayerAccount, iMoney, _, true);
+    SetEntData(clientIndex, g_iOffset_Account, iMoney, _, true);
 }
 
 /*
@@ -482,7 +473,7 @@ void AccountSetMoney(int clientIndex, int iMoney)
  *
  * @param clientIndex       The client index.
  * @param iMoney            The money amount.   
- * @param flCommision       The commision amount.
+ * @param flCommision       The commission amount.
  **/
 void AccountMenu(int clientIndex, int iMoney, float flCommision) 
 {
@@ -509,7 +500,7 @@ void AccountMenu(int clientIndex, int iMoney, float flCommision)
     // Sets language to target
     SetGlobalTransTarget(clientIndex);
 
-    // Validate commision
+    // Validate commission
     if(flCommision <= 0.0)
     {
         // Sets donate title
@@ -517,9 +508,9 @@ void AccountMenu(int clientIndex, int iMoney, float flCommision)
     }
     else
     {
-        // Sets commision title
+        // Sets commission title
         FormatEx(sInfo, sizeof(sInfo), "%.2f%", flCommision);
-        hMenu.SetTitle("%t", "commision", iMoney, "money", sInfo);
+        hMenu.SetTitle("%t", "commission", iMoney, "money", sInfo);
     }
 
     // Format some chars for showing in menu
@@ -561,7 +552,7 @@ void AccountMenu(int clientIndex, int iMoney, float flCommision)
     if(!iCount)
     {
         // Format some chars for showing in menu
-        Format(sBuffer, sizeof(sBuffer), "%t", "empty");
+        FormatEx(sBuffer, sizeof(sBuffer), "%t", "empty");
         hMenu.AddItem("empty", sBuffer);
     }
     
@@ -611,14 +602,12 @@ public int AccountMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int
             {
                 return;
             }
-            
-            // Initialize type char
-            static char sKey[SMALL_LINE_LENGTH];
-        
+
             // Gets menu info
-            hMenu.GetItem(mSlot, sKey, sizeof(sKey));
+            static char sBuffer[SMALL_LINE_LENGTH];
+            hMenu.GetItem(mSlot, sBuffer, sizeof(sBuffer));
             static char sInfo[3][SMALL_LINE_LENGTH];
-            ExplodeString(sKey, " ", sInfo, sizeof(sInfo), sizeof(sInfo[]));
+            ExplodeString(sBuffer, " ", sInfo, sizeof(sInfo), sizeof(sInfo[]));
             int targetIndex = StringToInt(sInfo[0]); int iMoney = StringToInt(sInfo[1]); 
             float flCommision = StringToFloat(sInfo[2]);
 
@@ -671,7 +660,7 @@ public int AccountMenuSlots(Menu hMenu, MenuAction mAction, int clientIndex, int
                     AccountSetClientCash(targetIndex, gClientData[targetIndex].Money + iAmount);
                     
                     // If help messages enabled, then show info
-                    if(gCvarList[CVAR_MESSAGES_HELP].BoolValue)
+                    if(gCvarList[CVAR_MESSAGES_DONATE].BoolValue)
                     {
                         // Gets client/target name
                         GetClientName(clientIndex, sInfo[0], sizeof(sInfo[]));

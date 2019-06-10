@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -42,10 +42,11 @@ public Plugin myinfo =
 }
 
 /**
- * @section Information about zombie class.
+ * @section Information about the zombie class.
  **/
 #define ZOMBIE_CLASS_SKILL_RADIUS       200.0
-#define ZOMBIE_CLASS_SKILL_DAMAGE       1.0  // 10 damage per sec
+#define ZOMBIE_CLASS_SKILL_DAMAGE       5.0
+#define ZOMBIE_CLASS_SKILL_DELAY        0.5
 /**
  * @endsection
  **/
@@ -53,9 +54,6 @@ public Plugin myinfo =
 // Sound index
 int gSound; ConVar hSoundLevel;
 #pragma unused gSound, hSoundLevel
-
-// Initialize vectors
-float vGasPostion[MAXPLAYERS+1][3];
 
 // Zombie index
 int gZombie;
@@ -92,19 +90,25 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
     // Validate the zombie class index
     if(ZP_GetClientClass(clientIndex) == gZombie)
     {
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound), 1);
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
-
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 1, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+        
         // Gets client origin
-        GetClientAbsOrigin(clientIndex, vGasPostion[clientIndex]);
+        static float vPosition[3];
+        GetEntPropVector(clientIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
         
-        // Create an effect
-        int iSmoke = ZP_CreateParticle(clientIndex, vGasPostion[clientIndex], _, "explosion_smokegrenade_base_green", ZP_GetClassSkillDuration(gZombie));
+        // Create a smoke effect
+        int particleIndex = UTIL_CreateParticle(_, vPosition, _, _, "explosion_smokegrenade_base_green", ZP_GetClassSkillDuration(gZombie));
         
-        // Create gas damage task
-        CreateTimer(0.1, ClientOnToxicGas, EntIndexToEntRef(iSmoke), TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+        // Validate entity
+        if(particleIndex != INVALID_ENT_REFERENCE)
+        {
+            // Sets parent for the entity
+            SetEntPropEnt(particleIndex, Prop_Send, "m_hOwnerEntity", clientIndex);
+    
+            // Create gas damage task
+            CreateTimer(ZOMBIE_CLASS_SKILL_DELAY, ClientOnToxicGas, EntIndexToEntRef(particleIndex), TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+        }
     }
     
     // Allow usage
@@ -125,36 +129,12 @@ public Action ClientOnToxicGas(Handle hTimer, int referenceIndex)
     // Validate entity
     if(entityIndex != INVALID_ENT_REFERENCE)
     {
-        // Initialize vectors
-        static float vVictimPosition[3];
-
-        // Gets owner index
-        int ownerIndex = GetEntPropEnt(entityIndex, Prop_Send, "m_hOwnerEntity");
-
-        // Validate owner
-        if(IsPlayerExist(ownerIndex, false))
-        {
-            // i = client index
-            for(int i = 1; i <= MaxClients; i++)
-            {
-                // Validate human
-                if(IsPlayerExist(i) && ZP_IsPlayerHuman(i))
-                {
-                    // Gets victim origin
-                    GetClientAbsOrigin(i, vVictimPosition);
-
-                    // Calculate the distance
-                    float flDistance = GetVectorDistance(vGasPostion[ownerIndex], vVictimPosition);
-
-                    // Validate distance
-                    if(flDistance <= ZOMBIE_CLASS_SKILL_RADIUS)
-                    {            
-                        // Create the damage for a victim
-                        ZP_TakeDamage(i, ownerIndex, ZOMBIE_CLASS_SKILL_DAMAGE, DMG_NERVEGAS);
-                    }
-                }
-            }
-        }
+        // Gets entity position
+        static float vPosition[3];
+        GetEntPropVector(entityIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
+ 
+        // Create the damage for victims
+        UTIL_CreateDamage(_, vPosition, GetEntPropEnt(entityIndex, Prop_Send, "m_hOwnerEntity"), ZOMBIE_CLASS_SKILL_DAMAGE, ZOMBIE_CLASS_SKILL_RADIUS, DMG_NERVEGAS);
 
         // Allow scream
         return Plugin_Continue;

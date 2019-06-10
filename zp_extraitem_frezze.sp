@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -87,9 +87,6 @@ public void OnLibraryAdded(const char[] sLibrary)
         // Hook entity events
         HookEvent("smokegrenade_detonate", EventEntitySmoke, EventHookMode_Post);
 
-        // Hook player events
-        HookEvent("player_death", EventPlayerDeath, EventHookMode_Pre);
-
         // Hooks server sounds
         AddNormalSoundHook(view_as<NormalSHook>(SoundsNormalHook));
     }
@@ -150,17 +147,15 @@ public void OnClientDisconnect(int clientIndex)
 }
 
 /**
- * Event callback (player_death)
- * @brief Client has been killed.
+ * @brief Called when a client has been killed.
  * 
- * @param gEventHook        The event handle.
- * @param gEventName        The name of the event.
- * @param dontBroadcast     If true, event is broadcasted to all clients, false if not.
+ * @param clientIndex       The client index.
+ * @param attackerIndex     The attacker index.
  **/
-public Action EventPlayerDeath(Event hEvent, char[] sName, bool dontBroadcast) 
+public void ZP_OnClientDeath(int clientIndex, int attackerIndex)
 {
     // Delete timer
-    delete Task_ZombieFreezed[GetClientOfUserId(hEvent.GetInt("userid"))];
+    delete Task_ZombieFreezed[clientIndex];
 }
 
 /**
@@ -182,18 +177,18 @@ public void ZP_OnClientUpdated(int clientIndex, int attackerIndex)
  * @brief Called before show an extraitem in the equipment menu.
  * 
  * @param clientIndex       The client index.
- * @param extraitemIndex    The item index.
+ * @param itemID            The item index.
  *
  * @return                  Plugin_Handled to disactivate showing and Plugin_Stop to disabled showing. Anything else
  *                              (like Plugin_Continue) to allow showing and calling the ZP_OnClientBuyExtraItem() forward.
  **/
-public Action ZP_OnClientValidateExtraItem(int clientIndex, int extraitemIndex)
+public Action ZP_OnClientValidateExtraItem(int clientIndex, int itemID)
 {
     // Check the item index
-    if(extraitemIndex == gItem)
+    if(itemID == gItem)
     {
         // Validate access
-        if(ZP_IsPlayerHasWeapon(clientIndex, gWeapon))
+        if(ZP_IsPlayerHasWeapon(clientIndex, gWeapon) != INVALID_ENT_REFERENCE)
         {
             return Plugin_Handled;
         }
@@ -207,12 +202,12 @@ public Action ZP_OnClientValidateExtraItem(int clientIndex, int extraitemIndex)
  * @brief Called after select an extraitem in the equipment menu.
  * 
  * @param clientIndex       The client index.
- * @param extraitemIndex    The item index.
+ * @param itemID            The item index.
  **/
-public void ZP_OnClientBuyExtraItem(int clientIndex, int extraitemIndex)
+public void ZP_OnClientBuyExtraItem(int clientIndex, int itemID)
 {
     // Check the item index
-    if(extraitemIndex == gItem)
+    if(itemID == gItem)
     { 
         // Give item and select it
         ZP_GiveClientWeapon(clientIndex, gWeapon);
@@ -231,12 +226,8 @@ public void ZP_OnClientBuyExtraItem(int clientIndex, int extraitemIndex)
  **/
 public void ZP_OnClientDamaged(int clientIndex, int &attackerIndex, int &inflictorIndex, float &flDamage, int &iBits, int &weaponIndex)
 {
-    // Client was damaged by 'bullet'
-    if(iBits & DMG_NEVERGIB)
-    {
-        // If the client is frozen, then stop
-        if(GetEntityMoveType(clientIndex) == MOVETYPE_NONE) flDamage = 0.0;
-    }
+    // If the client is frozen, then stop
+    if(GetEntityMoveType(clientIndex) == MOVETYPE_NONE) flDamage = 0.0;
 }
 
 /**
@@ -265,82 +256,52 @@ public Action EventEntitySmoke(Event hEvent, char[] sName, bool dontBroadcast)
     if(IsValidEdict(grenadeIndex))
     {
         // Validate custom grenade
-        if(ZP_GetWeaponID(grenadeIndex) == gWeapon)
+        if(GetEntProp(grenadeIndex, Prop_Data, "m_iHammerID") == gWeapon)
         {
-            // i = client index
-            for(int i = 1; i <= MaxClients; i++)
+            // Find any players in the radius
+            int i; int it = 1; /// iterator
+            while((i = ZP_FindPlayerInSphere(it, vEntPosition, GRENADE_FREEZE_RADIUS)) != INVALID_ENT_REFERENCE)
             {
-                // Validate zombie
-                if(IsPlayerExist(i) && ZP_IsPlayerZombie(i))
+                // Skip humans
+                if(ZP_IsPlayerHuman(i))
                 {
-                    // Gets victim origin
-                    GetClientAbsOrigin(i, vVictimPosition);
+                    continue;
+                }
+                
+                // Freeze the client
+                SetEntityMoveType(i, MOVETYPE_NONE);
 
-                    // Gets victim origin angle
-                    GetClientAbsAngles(i, vVictimAngle);
+                // Create an effect
+                GetEntPropVector(i, Prop_Data, "m_vecAbsOrigin", vVictimPosition);
+                UTIL_CreateParticle(i, vVictimPosition, _, _, "dynamic_smoke5", GRENADE_FREEZE_TIME+0.5);
 
-                    // Calculate the distance
-                    float flDistance = GetVectorDistance(vEntPosition, vVictimPosition);
+                // Create timer for removing freezing
+                delete Task_ZombieFreezed[i];
+                Task_ZombieFreezed[i] = CreateTimer(GRENADE_FREEZE_TIME, ClientRemoveFreezeEffect, GetClientUserId(i), TIMER_FLAG_NO_MAPCHANGE);
 
-                    // Validate distance
-                    if(flDistance <= GRENADE_FREEZE_RADIUS)
-                    {            
-                        // Freeze the client
-                        SetEntityMoveType(i, MOVETYPE_NONE);
+                // Randomize pitch
+                vVictimAngle[1] = GetRandomFloat(0.0, 360.0);
+       
+                // Create a prop_dynamic_override entity
+                int iceIndex = UTIL_CreateDynamic("ice", vVictimPosition, vVictimAngle, "models/player/custom_player/zombie/ice/ice.mdl", "idle");
 
-                        // Create an effect
-                        ZP_CreateParticle(i, vVictimPosition, _, "dynamic_smoke5", GRENADE_FREEZE_TIME+0.5);
-
-                        // Create timer for removing freezing
-                        delete Task_ZombieFreezed[i];
-                        Task_ZombieFreezed[i] = CreateTimer(GRENADE_FREEZE_TIME, ClientRemoveFreezeEffect, GetClientUserId(i), TIMER_FLAG_NO_MAPCHANGE);
-
-                        // Create a prop_dynamic_override entity
-                        int iceIndex = CreateEntityByName("prop_dynamic_override");
-
-                        // Validate entity
-                        if(iceIndex != INVALID_ENT_REFERENCE)
-                        {
-                            // Dispatch main values of the entity
-                            DispatchKeyValue(iceIndex, "model", "models/player/custom_player/zombie/ice/ice.mdl");
-                            DispatchKeyValue(iceIndex, "spawnflags", "256"); /// Start with collision disabled
-                            DispatchKeyValue(iceIndex, "solid", "0");
-                            
-                            // Spawn the entity
-                            DispatchSpawn(iceIndex);
-                            TeleportEntity(iceIndex, vVictimPosition, vVictimAngle, NULL_VECTOR);
-
-                            // Initialize time char
-                            static char sTime[SMALL_LINE_LENGTH];
-                            FormatEx(sTime, sizeof(sTime), "OnUser1 !self:kill::%f:1", GRENADE_FREEZE_TIME);
-
-                            // Sets modified flags on entity
-                            SetVariantString(sTime);
-                            AcceptEntityInput(iceIndex, "AddOutput");
-                            AcceptEntityInput(iceIndex, "FireUser1");
-                            
-                            // Emit freeze sound
-                            static char sSound[PLATFORM_LINE_LENGTH];
-                            ZP_GetSound(gSound, sSound, sizeof(sSound), 1);
-                            EmitSoundToAll(sSound, iceIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
-                        }
-                    }
+                // Validate entity
+                if(iceIndex != INVALID_ENT_REFERENCE)
+                {
+                    // Kill after some duration
+                    UTIL_RemoveEntity(iceIndex, GRENADE_FREEZE_TIME);
+                    
+                    // Play sound
+                    ZP_EmitSoundToAll(gSound, 1, iceIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
                 }
             }
-             
-            // Create a info_target entity
-            int infoIndex = ZP_CreateEntity(vEntPosition, GRENADE_FREEZE_EXP_TIME);
 
-            // Validate entity
-            if(IsValidEdict(infoIndex))
-            {
-                // Create an explosion effect
-                ZP_CreateParticle(infoIndex, vEntPosition, _, "explosion_hegrenade_snow", GRENADE_FREEZE_EXP_TIME);
-            }
+            // Create an explosion effect
+            UTIL_CreateParticle(_, vEntPosition, _, _, "explosion_hegrenade_snow", GRENADE_FREEZE_EXP_TIME);
             
             // Create sparks splash effect
             TE_SetupSparks(vEntPosition, NULL_VECTOR, 5000, 1000);
-            TE_SendToAllInRange(vEntPosition, RangeType_Visibility);
+            TE_SendToAll();
             
             // Remove grenade
             AcceptEntityInput(grenadeIndex, "Kill");
@@ -366,73 +327,31 @@ public Action ClientRemoveFreezeEffect(Handle hTimer, int userID)
     if(clientIndex)
     {
         // Initialize vectors
-        float vEntPosition[3]; static float vEntAngle[3];
+        static float vGibAngle[3]; float vShootAngle[3]; 
 
         // Unfreeze the client
         SetEntityMoveType(clientIndex, MOVETYPE_WALK);
         
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound), 2);
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 2, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
 
         // Create a breaked glass effect
-        static char sModel[NORMAL_LINE_LENGTH];
+        static char sBuffer[NORMAL_LINE_LENGTH];
         for(int x = 0; x <= 5; x++)
         {
             // Find gib positions
-            vEntPosition[1] += 60.0; vEntAngle[0] = GetRandomFloat(0.0, 360.0); vEntAngle[1] = GetRandomFloat(-15.0, 15.0); vEntAngle[2] = GetRandomFloat(-15.0, 15.0); switch(x)
+            vShootAngle[1] += 60.0; vGibAngle[0] = GetRandomFloat(0.0, 360.0); vGibAngle[1] = GetRandomFloat(-15.0, 15.0); vGibAngle[2] = GetRandomFloat(-15.0, 15.0); switch(x)
             {
-                case 0 : strcopy(sModel, sizeof(sModel), "models/gibs/glass_shard01.mdl");
-                case 1 : strcopy(sModel, sizeof(sModel), "models/gibs/glass_shard02.mdl");
-                case 2 : strcopy(sModel, sizeof(sModel), "models/gibs/glass_shard03.mdl");
-                case 3 : strcopy(sModel, sizeof(sModel), "models/gibs/glass_shard04.mdl");
-                case 4 : strcopy(sModel, sizeof(sModel), "models/gibs/glass_shard05.mdl");
-                case 5 : strcopy(sModel, sizeof(sModel), "models/gibs/glass_shard06.mdl");
+                case 0 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/glass_shard01.mdl");
+                case 1 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/glass_shard02.mdl");
+                case 2 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/glass_shard03.mdl");
+                case 3 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/glass_shard04.mdl");
+                case 4 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/glass_shard05.mdl");
+                case 5 : strcopy(sBuffer, sizeof(sBuffer), "models/gibs/glass_shard06.mdl");
             }
         
-            // Create a shooter entity
-            int entityIndex = CreateEntityByName("env_shooter");
-
-            // If entity isn't valid, then skip
-            if(entityIndex != INVALID_ENT_REFERENCE)
-            {
-                // Dispatch main values of the entity
-                DispatchKeyValueVector(entityIndex, "angles", vEntPosition);
-                DispatchKeyValueVector(entityIndex, "gibangles", vEntAngle);
-                DispatchKeyValue(entityIndex, "rendermode", "5");
-                DispatchKeyValue(entityIndex, "shootsounds", "0");
-                DispatchKeyValue(entityIndex, "shootmodel", sModel);
-                DispatchKeyValueFloat(entityIndex, "m_iGibs", GLASS_GIBS_AMOUNT);
-                DispatchKeyValueFloat(entityIndex, "delay", GLASS_GIBS_DELAY);
-                DispatchKeyValueFloat(entityIndex, "m_flVelocity", GLASS_GIBS_SPEED);
-                DispatchKeyValueFloat(entityIndex, "m_flVariance", GLASS_GIBS_VARIENCE);
-                DispatchKeyValueFloat(entityIndex, "m_flGibLife", GLASS_GIBS_LIFE);
-
-                // Spawn the entity into the world
-                DispatchSpawn(entityIndex);
-
-                // Activate the entity
-                ActivateEntity(entityIndex);  
-                AcceptEntityInput(entityIndex, "Shoot");
-
-                // Sets parent to the client
-                SetVariantString("!activator"); 
-                AcceptEntityInput(entityIndex, "SetParent", clientIndex, entityIndex); 
-
-                // Sets attachment to the client
-                SetVariantString("eholster"); 
-                AcceptEntityInput(entityIndex, "SetParentAttachment", clientIndex, entityIndex);
-
-                // Initialize time char
-                static char sTime[SMALL_LINE_LENGTH];
-                FormatEx(sTime, sizeof(sTime), "OnUser1 !self:kill::%f:1", GLASS_GIBS_DURATION);
-
-                // Sets modified flags on the entity
-                SetVariantString(sTime);
-                AcceptEntityInput(entityIndex, "AddOutput");
-                AcceptEntityInput(entityIndex, "FireUser1");
-            }
+            // Create gibs
+            UTIL_CreateShooter(clientIndex, "eholster", _, MAT_GLASS, sBuffer, vShootAngle, vGibAngle, GLASS_GIBS_AMOUNT, GLASS_GIBS_DELAY, GLASS_GIBS_SPEED, GLASS_GIBS_VARIENCE, GLASS_GIBS_LIFE, GLASS_GIBS_DURATION);
         }
     }
     
@@ -459,27 +378,25 @@ public Action SoundsNormalHook(int clients[MAXPLAYERS-1], int &numClients, char[
     if(IsValidEdict(entityIndex))
     {
         // Validate custom grenade
-        if(ZP_GetWeaponID(entityIndex) == gWeapon)
+        if(GetEntProp(entityIndex, Prop_Data, "m_iHammerID") == gWeapon)
         {
-            // Initialize sound char
-            static char sSound[PLATFORM_LINE_LENGTH];
-
             // Validate sound
             if(!strncmp(sSample[31], "hit", 3, false))
             {
-                // Emit a custom bounce sound
-                ZP_GetSound(gSound, sSound, sizeof(sSound), GetRandomInt(4, 6));
-                EmitSoundToAll(sSound, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+                // Play sound
+                ZP_EmitSoundToAll(gSound, GetRandomInt(4, 6), entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+                
+                // Block sounds
+                return Plugin_Stop; 
             }
             else if(!strncmp(sSample[29], "emit", 4, false))
             {
-                // Emit explosion sound
-                ZP_GetSound(gSound, sSound, sizeof(sSound), 3);
-                EmitSoundToAll(sSound, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+                // Play sound
+                ZP_EmitSoundToAll(gSound, 3, entityIndex, SNDCHAN_STATIC, hSoundLevel.IntValue);
+               
+                // Block sounds
+                return Plugin_Stop; 
             }
-
-            // Block sounds
-            return Plugin_Stop; 
         }
     }
     

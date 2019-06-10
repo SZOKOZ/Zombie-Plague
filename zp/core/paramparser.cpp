@@ -28,7 +28,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -163,7 +163,7 @@ int ParamParseString(ArrayList &arrayBuffer, char[] sParamString, int iMaxLen, c
 
     // Checks if string has incorrect quotes
     int iQuotes = CountCharInString(sParamString, '"');
-    if(iQuotes % 2)
+    if(iQuotes & 1) /// Is odd ?
     {
         strcopy(sParamString, iMaxLen, sParamError[PARAM_ERROR_MISSING_QUOTES]);
         return PARAM_ERROR_MISSING_QUOTES;
@@ -191,7 +191,7 @@ int ParamParseString(ArrayList &arrayBuffer, char[] sParamString, int iMaxLen, c
             
             // Checks if string has incorrect quotes
             iQuotes = CountCharInString(sValue[i], '"');
-            if(iQuotes % 2)
+            if(iQuotes & 1) /// Is odd ?
             {
                 strcopy(sParamString, iMaxLen, sParamError[PARAM_ERROR_MISSING_QUOTES]);
                 return PARAM_ERROR_MISSING_QUOTES;
@@ -257,7 +257,7 @@ bool StrContain(char[] sBuffer, char[] sSource, char cSeparator)
         // Validate char
         if(sSource[i] == sBuffer[x])
         {
-            if(++x == iLen2) /// Check lenght 
+            if(++x == iLen2) /// Check length 
             {
                 // Validate delimitter
                 y = i + 1;
@@ -266,7 +266,7 @@ bool StrContain(char[] sBuffer, char[] sSource, char cSeparator)
                     return true;
                 }
             }
-            else if(x == 1) /// Check first comparation
+            else if(x == 1) /// Check first comparator
             {
                 // Validate prefix
                 y = i - 1;
@@ -296,7 +296,7 @@ bool StrContain(char[] sBuffer, char[] sSource, char cSeparator)
 int CountCharInString(char[] sBuffer, char cSymbol)
 {
     // Initialize index
-    int iAmount;
+    int iCount;
     
     // i = char index
     int iLen = strlen(sBuffer);
@@ -306,12 +306,12 @@ int CountCharInString(char[] sBuffer, char cSymbol)
         if (sBuffer[i] == cSymbol)
         {
             // Increment amount
-            iAmount++;
+            iCount++;
         }
     }
 
     // Return amount
-    return iAmount ? iAmount : -1;
+    return iCount ? iCount : -1;
 }
 
 /**

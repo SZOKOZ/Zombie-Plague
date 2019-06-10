@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -31,7 +31,6 @@
 void PlayerVEffectsOnCvarInit(/*void*/)
 {
     // Create cvars
-    gCvarList[CVAR_VEFFECTS_PARTICLES]        = FindConVar("zp_veffects_particles"); 
     gCvarList[CVAR_VEFFECTS_INFECT]           = FindConVar("zp_veffects_infect"); 
     gCvarList[CVAR_VEFFECTS_HUMANIZE]         = FindConVar("zp_veffects_humanize"); 
     gCvarList[CVAR_VEFFECTS_RESPAWN]          = FindConVar("zp_veffects_respawn"); 
@@ -104,7 +103,7 @@ void PlayerVEffectsOnClientInfected(int clientIndex, int attackerIndex)
     }
 
     // Emit a infect effect
-    VEffectSpawnParticle(clientIndex, sAttachment, sParticle, flDuration);
+    ParticlesCreate(clientIndex, sAttachment, sParticle, flDuration);
 }
 
 /**
@@ -162,7 +161,7 @@ void PlayerVEffectsOnClientHumanized(int clientIndex)
     }
     
     // Emit a humanize effect
-    VEffectSpawnParticle(clientIndex, sAttachment, sParticle, flDuration);
+    ParticlesCreate(clientIndex, sAttachment, sParticle, flDuration);
 }
 
 /**
@@ -194,7 +193,7 @@ void PlayerVEffectsOnClientRegen(int clientIndex)
     gCvarList[CVAR_VEFFECTS_HEAL_ATTACH].GetString(sAttachment, sizeof(sAttachment));
     
     // Emit a heal effect
-    VEffectSpawnParticle(clientIndex, sAttachment, sParticle, flDuration);
+    ParticlesCreate(clientIndex, sAttachment, sParticle, flDuration);
 }
 
 /**
@@ -226,5 +225,5 @@ void PlayerVEffectsOnClientJump(int clientIndex)
     gCvarList[CVAR_VEFFECTS_LEAP_ATTACH].GetString(sAttachment, sizeof(sAttachment));
     
     // Emit a jump effect
-    VEffectSpawnParticle(clientIndex, sAttachment, sParticle, flDuration);
+    ParticlesCreate(clientIndex, sAttachment, sParticle, flDuration);
 }

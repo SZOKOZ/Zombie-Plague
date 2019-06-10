@@ -17,7 +17,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -75,7 +75,8 @@ public void ZP_OnEngineExecute(/*void*/)
 public void ZP_OnClientUpdated(int clientIndex, int attackerIndex)
 {
     // Reset visibility
-    SetEntPropFloat(clientIndex, Prop_Send, "m_flModelScale", 1.0);  
+    SetEntityRenderMode(clientIndex, RENDER_TRANSALPHA); 
+    SetEntityRenderColor(clientIndex, 255, 255, 255, 255);  
 }
 
 /**
@@ -92,17 +93,16 @@ public Action ZP_OnClientSkillUsed(int clientIndex)
     if(ZP_GetClientClass(clientIndex) == gHuman)
     {
         // Make model invisible
-        SetEntPropFloat(clientIndex, Prop_Send, "m_flModelScale", 0.0);  
+        SetEntityRenderMode(clientIndex, RENDER_TRANSALPHA); 
+        SetEntityRenderColor(clientIndex, 255, 255, 255, 0);
 
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound), 1);
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 1, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
         
         // Create effect
         static float vPosition[3];
-        GetClientAbsOrigin(clientIndex, vPosition);
-        ZP_CreateParticle(clientIndex, vPosition, _, "ekvalaizer_gray", ZP_GetClassSkillDuration(gHuman));
+        GetEntPropVector(clientIndex, Prop_Data, "m_vecAbsOrigin", vPosition);
+        UTIL_CreateParticle(clientIndex, vPosition, _, _, "ekvalaizer_gray", ZP_GetClassSkillDuration(gHuman));
     }
     
     // Allow usage
@@ -120,11 +120,10 @@ public void ZP_OnClientSkillOver(int clientIndex)
     if(ZP_GetClientClass(clientIndex) == gHuman)
     {
         // Reset visibility
-        SetEntPropFloat(clientIndex, Prop_Send, "m_flModelScale", 1.0);  
+        SetEntityRenderMode(clientIndex, RENDER_TRANSALPHA); 
+        SetEntityRenderColor(clientIndex, 255, 255, 255, 255);  
 
-        // Emit sound
-        static char sSound[PLATFORM_LINE_LENGTH];
-        ZP_GetSound(gSound, sSound, sizeof(sSound), 2);
-        EmitSoundToAll(sSound, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
+        // Play sound
+        ZP_EmitSoundToAll(gSound, 2, clientIndex, SNDCHAN_VOICE, hSoundLevel.IntValue);
     }
 }

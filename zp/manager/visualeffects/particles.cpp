@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -28,10 +28,6 @@
 /**
  * Variables to store SDK calls handlers.
  **/
-Handle hSDKCallGetParticleSystemCount;
-Handle hSDKCallUncacheAllParticleSystems;
-Handle hSDKCallDestructorParticleDefinition;
-Handle hSDKCallFindParticleSystemDefinition;
 Handle hSDKCallDestructorParticleDictionary;
 Handle hSDKCallContainerFindTable;
 Handle hSDKCallTableDeleteAllStrings;
@@ -39,84 +35,31 @@ Handle hSDKCallTableDeleteAllStrings;
 /**
  * Variables to store virtual SDK offsets.
  **/
-Address particleSystemMgr;
-Address particleSystemDictionary;
-Address networkStringTable;
+Address pParticleSystemDictionary;
+Address pNetworkStringTable;
+int ParticleSystem_Count;
 
 /**
  * @brief Particles module init function.
+ *
+ * @warning Windows are not require that module without DHook extention.
  **/
 void ParticlesOnInit(/*void*/)
 {
-    // Starts the preparation of an SDK call
-    StartPrepSDKCall(SDKCall_Raw);
-    PrepSDKCall_SetFromConf(gServerData.Config, SDKConf_Signature, "CParticleSystemMgr::GetParticleSystemCount");
-    
-    // Adds a parameter to the calling convention. This should be called in normal ascending order
-    PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
-
-    // Validate call
-    if(!(hSDKCallGetParticleSystemCount = EndPrepSDKCall()))
+    #if !defined USE_DETOUR
+    // If windows, then stop
+    if(gServerData.Platform == OS_Windows)
     {
-        // Log failure
-        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Effects, "GameData Validation", "Failed to load SDK call \"CParticleSystemMgr::GetParticleSystemCount\". Update signature in \"%s\"", PLUGIN_CONFIG);
         return;
     }
-
-    /*_________________________________________________________________________________________________________________________________________*/
-
-    // Starts the preparation of an SDK call
-    StartPrepSDKCall(SDKCall_Raw);
-    PrepSDKCall_SetFromConf(gServerData.Config, SDKConf_Signature, "CParticleSystemMgr::UncacheAllParticleSystems");
+    #endif
     
-    // Validate call
-    if(!(hSDKCallUncacheAllParticleSystems = EndPrepSDKCall()))
-    {
-        // Log failure
-        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Effects, "GameData Validation", "Failed to load SDK call \"CParticleSystemMgr::UncacheAllParticleSystems\". Update signature in \"%s\"", PLUGIN_CONFIG);
-        return;
-    }
-
-    /*_________________________________________________________________________________________________________________________________________*/
-    
-    // Starts the preparation of an SDK call
-    StartPrepSDKCall(SDKCall_Raw);
-    PrepSDKCall_SetFromConf(gServerData.Config, SDKConf_Signature, "CParticleSystemDefinition::~CParticleSystemDefinition");
-
-    // Validate call
-    if(!(hSDKCallDestructorParticleDefinition = EndPrepSDKCall()))
-    {
-        // Log failure
-        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Effects, "GameData Validation", "Failed to load SDK call \"CParticleSystemDefinition::Uncache\". Update signature in \"%s\"", PLUGIN_CONFIG);
-        return;
-    }
-    
-    /*_________________________________________________________________________________________________________________________________________*/
-    
-    // Starts the preparation of an SDK call
-    StartPrepSDKCall(SDKCall_Raw);
-    PrepSDKCall_SetFromConf(gServerData.Config, SDKConf_Signature, "CParticleSystemDictionary::FindParticleSystem");
-    
-    // Adds a parameter to the calling convention. This should be called in normal ascending order
-    PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-    PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
-    
-    // Validate call
-    if(!(hSDKCallFindParticleSystemDefinition = EndPrepSDKCall()))
-    {
-        // Log failure
-        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Effects, "GameData Validation", "Failed to load SDK call \"CParticleSystemDictionary::FindParticleSystem\". Update signature in \"%s\"", PLUGIN_CONFIG);
-        return;
-    }
-
-    /*_________________________________________________________________________________________________________________________________________*/
-
     // Starts the preparation of an SDK call
     StartPrepSDKCall(SDKCall_Raw);
     PrepSDKCall_SetFromConf(gServerData.Config, SDKConf_Signature, "CParticleSystemDictionary::~CParticleSystemDictionary");
     
     // Validate call
-    if(!(hSDKCallDestructorParticleDictionary = EndPrepSDKCall()))
+    if((hSDKCallDestructorParticleDictionary = EndPrepSDKCall()) == null)
     {
         // Log failure
         LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Effects, "GameData Validation", "Failed to load SDK call \"CParticleSystemDictionary::~CParticleSystemDictionary\". Update signature in \"%s\"", PLUGIN_CONFIG);
@@ -134,10 +77,10 @@ void ParticlesOnInit(/*void*/)
     PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
     
     // Validate call
-    if(!(hSDKCallContainerFindTable = EndPrepSDKCall()))
+    if((hSDKCallContainerFindTable = EndPrepSDKCall()) == null)
     {
         // Log failure
-        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Effects, "GameData Validation", "Failed to load SDK call \"CNetworkStringTableContainer::FindTable\". Update signature in \"%s\"", PLUGIN_CONFIG);
+        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Effects, "GameData Validation", "Failed to load SDK call \"CNetworkStringTableContainer::FindTable\". Update virtual offset in \"%s\"", PLUGIN_CONFIG);
         return;
     }
     
@@ -148,7 +91,7 @@ void ParticlesOnInit(/*void*/)
     PrepSDKCall_SetFromConf(gServerData.Config, SDKConf_Signature, "CNetworkStringTable::DeleteAllStrings");
     
     // Validate call
-    if(!(hSDKCallTableDeleteAllStrings = EndPrepSDKCall()))
+    if((hSDKCallTableDeleteAllStrings = EndPrepSDKCall()) == null)
     {
         // Log failure
         LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Effects, "GameData Validation", "Failed to load SDK call \"CNetworkStringTable::DeleteAllStrings\". Update signature in \"%s\"", PLUGIN_CONFIG);
@@ -158,24 +101,74 @@ void ParticlesOnInit(/*void*/)
     /*_________________________________________________________________________________________________________________________________________*/
     
     // Load other offsets
-    fnInitGameConfAddress(gServerData.Config, particleSystemMgr, "g_pParticleSystemMgr");
-    fnInitGameConfAddress(gServerData.Config, particleSystemDictionary, "m_pParticleSystemDictionary");
-    fnInitGameConfAddress(gServerData.Config, networkStringTable, "s_NetworkStringTable");
+    fnInitGameConfAddress(gServerData.Config, pParticleSystemDictionary, "m_pParticleSystemDictionary");
+    fnInitGameConfAddress(gServerData.Config, pNetworkStringTable, "s_NetworkStringTable");
+    fnInitGameConfOffset(gServerData.Config, ParticleSystem_Count, "CParticleSystemDictionary::Count");
 }
 
 /**
  * @brief Particles module load function.
+ *
+ * @warning Windows are not require that module without DHook extention.
  **/
 void ParticlesOnLoad(/*void*/)
 {
-    // Initialize buffer char
-    static char sBuffer[PLATFORM_LINE_LENGTH];
+    #if !defined USE_DETOUR
+    // If windows, then stop
+    if(gServerData.Platform == OS_Windows)
+    {
+        return;
+    }
+    #endif
 
-    // Validate that particles wasn't precache yet
-    bool bSave = LockStringTables(false);
-    int iCount = SDKCall(hSDKCallGetParticleSystemCount, particleSystemMgr);
-    int iTable = SDKCall(hSDKCallContainerFindTable, networkStringTable, "ParticleEffectNames");
-    if(!iCount && iTable) /// Validate that table is exist and it empty
+    // Now copy data to array structure
+    ParticlesOnCacheData();
+    
+    // Precache particles
+    ParticlesOnPrecache();
+}
+
+/**
+ * @brief Particles module purge function.
+ *
+ * @warning Windows are not require that module without DHook extention.
+ **/
+void ParticlesOnPurge(/*void*/)
+{
+    #if !defined USE_DETOUR
+    // If windows, then stop
+    if(gServerData.Platform == OS_Windows)
+    {
+        return;
+    }
+    #endif
+    
+    /// @link https://github.com/VSES/SourceEngine2007/blob/43a5c90a5ada1e69ca044595383be67f40b33c61/src_main/particles/particles.cpp#L81
+    SDKCall(hSDKCallDestructorParticleDictionary, pParticleSystemDictionary);
+
+    // Clear particles in the effect table
+    Address pTable = ParticlesFindTable("ParticleEffectNames");
+    if(pTable != Address_Null)   
+    {
+        ParticlesClearTable(pTable);
+    }
+
+    // Clear particles in the extra effect table
+    pTable = ParticlesFindTable("ExtraParticleFilesTable");
+    if(pTable != Address_Null)   
+    {
+        ParticlesClearTable(pTable);
+    }
+}
+
+/**
+ * @brief Caches particles data from manifest file.
+ **/
+void ParticlesOnCacheData(/*void*/)
+{
+    // Validate that table is exist and it empty
+    Address pTable = ParticlesFindTable("ParticleEffectNames");
+    if(pTable != Address_Null && !ParticlesCount())
     {
         // Opens the file
         File hFile = OpenFile("particles/particles_manifest.txt", "rt", true);
@@ -188,54 +181,56 @@ void ParticlesOnLoad(/*void*/)
         }
 
         // Read lines in the file
-        while(hFile.ReadLine(sBuffer, sizeof(sBuffer)))
+        static char sPath[PLATFORM_LINE_LENGTH];
+        while(hFile.ReadLine(sPath, sizeof(sPath)))
         {
             // Checks if string has correct quotes
-            int iQuotes = CountCharInString(sBuffer, '"');
+            int iQuotes = CountCharInString(sPath, '"');
             if(iQuotes == 4)
             {
                 // Trim string
-                TrimString(sBuffer);
+                TrimString(sPath);
 
                 // Copy value string
-                strcopy(sBuffer, sizeof(sBuffer), sBuffer[strlen("\"file\"")]);
+                strcopy(sPath, sizeof(sPath), sPath[strlen("\"file\"")]);
                 
                 // Trim string
-                TrimString(sBuffer);
+                TrimString(sPath);
                 
                 // Strips a quote pair off a string 
-                StripQuotes(sBuffer);
+                StripQuotes(sPath);
 
                 // Precache model
-                int i; if(sBuffer[i] == '!') i++;
-                PrecacheGeneric(sBuffer[i], true);
-                SDKCall(hSDKCallTableDeleteAllStrings, iTable); /// HACK~HACK
+                int i; if(sPath[i] == '!') i++;
+                PrecacheGeneric(sPath[i], true);
+                ParticlesClearTable(pTable); /// HACK~HACK
+                /// Clear tables after each file because some of them contains
+                /// huge amount of particles and we work around the limit
             }
         }
     }
-    
-    // Initialize the table index
-    static int tableIndex = INVALID_STRING_TABLE;
+}
 
-    // Validate table
-    if(tableIndex == INVALID_STRING_TABLE)
-    {
-        // Searches for a string table
-        tableIndex = FindStringTable("ParticleEffectNames");
-    }
-    
+/**
+ * @brief Caches particles data from the manifest file.
+ **/
+void ParticlesOnPrecache(/*void*/)
+{
+    // Initialize buffer char
+    static char sBuffer[PLATFORM_LINE_LENGTH];
+
     // If array hasn't been created, then create
     if(gServerData.Particles == null)
     {
         // Initialize a particle list array
         gServerData.Particles = CreateArray(NORMAL_LINE_LENGTH); 
 
-        // i = table string
-        iCount = GetStringTableNumStrings(tableIndex);
+        // i = string index
+        int iCount = GetParticleEffectCount();
         for(int i = 0; i < iCount; i++)
         {
             // Gets the string at a given index
-            ReadStringTable(tableIndex, i, sBuffer, sizeof(sBuffer));
+            GetParticleEffectName(i, sBuffer, sizeof(sBuffer));
             
             // Push data into array 
             gServerData.Particles.PushString(sBuffer);
@@ -243,45 +238,135 @@ void ParticlesOnLoad(/*void*/)
     }
     else
     {
-        // i = particle name
-        iCount = gServerData.Particles.Length;
+        // i = string index
+        int iCount = gServerData.Particles.Length;
         for(int i = 0; i < iCount; i++)
         {
             // Gets the string at a given index
             gServerData.Particles.GetString(i, sBuffer, sizeof(sBuffer));
             
             // Push data into table 
-            AddToStringTable(tableIndex, sBuffer);
+            PrecacheParticleEffect(sBuffer);
         }
-    }   
-    LockStringTables(bSave);
+    }
 }
 
 /**
- * @brief Particles module purge function.
+ * Hook: SetTransmit
+ * @brief Called right before the entity transmitting to other entities.
+ *
+ * @param entityIndex       The entity index.
+ * @param clientIndex       The client index.
  **/
-void ParticlesOnPurge(/*void*/)
+public Action ParticlesOnTransmit(int entityIndex, int clientIndex)
 {
-    // @link https://github.com/VSES/SourceEngine2007/blob/43a5c90a5ada1e69ca044595383be67f40b33c61/src_main/particles/particles.cpp#L2659
-    SDKCall(hSDKCallUncacheAllParticleSystems, particleSystemMgr);
-
-    // i = m_ParticleNameMap
-    int iCount = SDKCall(hSDKCallGetParticleSystemCount, particleSystemMgr); 
-    for(int i = 0; i < iCount; i++)
+    // Allow particle to be transmittable
+    if(GetEdictFlags(entityIndex) & FL_EDICT_ALWAYS)
     {
-        // @link https://github.com/ValveSoftware/source-sdk-2013/blob/0d8dceea4310fde5706b3ce1c70609d72a38efdf/sp/src/public/particles/particles.h#L2131
-        Address particleSystemDefinition = SDKCall(hSDKCallFindParticleSystemDefinition, particleSystemDictionary, i);
-        SDKCall(hSDKCallDestructorParticleDefinition, particleSystemDefinition);
+        SetEdictFlags(entityIndex, (GetEdictFlags(entityIndex) ^ FL_EDICT_ALWAYS));
+    }
+
+    // Validate transmitting
+    return ToolsOnEntityTransmit(entityIndex, clientIndex);
+}
+
+/*
+ * Stocks particles API.
+ */ 
+
+/**
+ * @brief Create an attached particle entity.
+ * 
+ * @param parentIndex       The parent index.
+ * @param sAttach           The attachment name.
+ * @param sEffect           The particle name.
+ * @param flDurationTime    The duration of an effect.
+ * @return                  The entity index.
+ **/
+int ParticlesCreate(int parentIndex, char[] sAttach, char[] sEffect, float flDurationTime)
+{
+    // Validate name
+    if(!hasLength(sEffect) || (hasLength(sAttach) && !ToolsLookupAttachment(parentIndex, sAttach)))
+    {
+        return INVALID_ENT_REFERENCE;
     }
     
-    // @link https://github.com/VSES/SourceEngine2007/blob/43a5c90a5ada1e69ca044595383be67f40b33c61/src_main/particles/particles.cpp#L81
-    SDKCall(hSDKCallDestructorParticleDictionary, particleSystemDictionary);
+    // Initialize vector variables
+    static float vPosition[3]; static float vAngle[3]; 
     
-    /*_________________________________________________________________________________________________________________________________________*/
-    
-    /// Clear all particles effect table
-    bool bSave = LockStringTables(false);
-    int iTable = SDKCall(hSDKCallContainerFindTable, networkStringTable, "ParticleEffectNames");
-    if(iTable)   SDKCall(hSDKCallTableDeleteAllStrings, iTable);
-    LockStringTables(bSave);
+    // Validate no attach
+    if(!hasLength(sAttach))
+    { 
+        // Gets client position/angle
+        ToolsGetAbsOrigin(parentIndex, vPosition);
+        ToolsGetAbsAngles(parentIndex, vAngle);
+    }
+
+    // Return on success
+    return UTIL_CreateParticle(parentIndex, vPosition, vAngle, sAttach, sEffect, flDurationTime);
+}
+
+/**
+ * @brief Delete an attached particle from the entity.
+ * 
+ * @param clientIndex       The client index.
+ **/
+void ParticlesRemove(int clientIndex)
+{
+    // Initialize classname char
+    static char sClassname[SMALL_LINE_LENGTH];
+
+    // i = entity index
+    int MaxEntities = GetMaxEntities();
+    for(int i = MaxClients; i <= MaxEntities; i++)
+    {
+        // Validate entity
+        if(IsValidEdict(i))
+        {
+            // Gets valid edict classname
+            GetEdictClassname(i, sClassname, sizeof(sClassname));
+
+            // If entity is an attach particle entity
+            if(sClassname[0] == 'i' && sClassname[5] == 'p' && sClassname[6] == 'a')
+            {
+                // Validate parent
+                if(ToolsGetOwner(i) == clientIndex)
+                {
+                    AcceptEntityInput(i, "Kill"); /// Destroy
+                }
+            }
+        }
+    }
+}
+
+/**
+ * @brief Find the table pointer by a name.
+ *
+ * @return                  The address of the table.                
+ **/
+Address ParticlesFindTable(char[] sTable)
+{
+    return SDKCall(hSDKCallContainerFindTable, pNetworkStringTable, sTable);
+}    
+
+/**
+ * @brief Clear the table by a pointer.  
+ * 
+ * @param pTable            The table address.
+ **/
+void ParticlesClearTable(Address pTable) 
+{
+    SDKCall(hSDKCallTableDeleteAllStrings, pTable);
+}
+
+/**
+ * @brief Gets the amount of precached particles in the dictionary.
+ *
+ * @return                  The amount of particles.
+ *
+ * @link https://github.com/VSES/SourceEngine2007/blob/43a5c90a5ada1e69ca044595383be67f40b33c61/src_main/particles/particles.cpp#L54                  
+ **/
+int ParticlesCount(/*void*/)
+{
+    return LoadFromAddress(pParticleSystemDictionary + view_as<Address>(ParticleSystem_Count), NumberType_Int16);
 }

@@ -20,14 +20,11 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
 
-// Regex library
-#include <regex>
- 
 /**
  * @section Engine versions.
  **/
@@ -185,114 +182,6 @@ void GameEngineOnPurge(/*void*/)
  */
 
 /**
- * @brief Returns true if the player is connected and alive, false if not.
- *
- * @param clientIndex       The client index.
- * @param clientAlive       (Optional) Set to true to validate that the client is alive, false to ignore.
- *
- * @return                  True or false.
- **/
-bool IsPlayerExist(int clientIndex, bool clientAlive = true)
-{
-    // If client isn't valid, then stop
-    if(clientIndex <= 0 || clientIndex > MaxClients)
-    {
-        return false;
-    }
-
-    // If client isn't connected, then stop
-    if(!IsClientConnected(clientIndex))
-    {
-        return false;
-    }
-
-    // If client isn't in game, then stop
-    if(!IsClientInGame(clientIndex) || IsClientInKickQueue(clientIndex)) /// Improved, thanks to fl0wer!
-    {
-        return false;
-    }
-
-    // If client is in GoTV, then stop
-    if(IsClientSourceTV(clientIndex))
-    {
-        return false;
-    } 
-
-    // If client isn't alive, then stop
-    if(clientAlive && !IsPlayerAlive(clientIndex))
-    {
-        return false;
-    }
-
-    // If client exist
-    return true;
-}
-
-/**
- * @brief Returns whether a player is in a spesific group or not.
- *
- * @param clientIndex       The client index.
- * @param sGroup            The SourceMod group name to check.
- *
- * @return                  True or false.
- **/
-bool IsPlayerInGroup(int clientIndex, char[] sGroup)
-{
-    // Validate client
-    if(!IsPlayerExist(clientIndex, false))
-    {
-        return false;
-    }
-
-    /*********************************
-     *                               *
-     *   FLAG GROUP AUTHENTICATION   *
-     *                               *
-     *********************************/
-
-    // Finds a group by name
-    GroupId nGroup = FindAdmGroup(sGroup);
-    
-    // Validate group
-    if(nGroup == INVALID_GROUP_ID)
-    {
-        return false;
-    }
-     
-    // Retrieves a client AdminId
-    AdminId iD = GetUserAdmin(clientIndex);
-    
-    // Validate id
-    if(iD == INVALID_ADMIN_ID)
-    {
-        return false;
-    }
-
-    // Initialize group char
-    static char sGroupName[SMALL_LINE_LENGTH];
-
-    // Gets immunity level
-    int iImmunity = GetAdmGroupImmunityLevel(nGroup);
-    
-    // i = group index
-    int iSize = GetAdminGroupCount(iD);
-    for(int i = 0; i < iSize; i++)
-    {
-        // Gets group name
-        nGroup = GetAdminGroup(iD, i, sGroupName, sizeof(sGroupName));
-
-        // Validate groups
-        if(!strcmp(sGroup, sGroupName, false) || iImmunity <= GetAdmGroupImmunityLevel(nGroup))
-        {
-            return true;
-        }
-    }
-    
-    // No groups or no match
-    return false;
-}
-
-/**
  * @brief Gets amount of total playing players.
  *
  * @return                  The amount of total playing players.
@@ -445,14 +334,15 @@ stock int fnGetRandomZombie(/*void*/)
 /**
  * @brief Gets random array of total alive players.
  *
+ * @param clientIndex       The array containing target player indexes.
  * @param targetIndex       (Optional) The target index.
  * @param bZombie           (Optional) True to state zombie, false for human on the target index.
  * @return                  The random array of total alive players.
  **/
-stock int[] fnGetRandomAlive(int targetIndex = -1, bool bZombie = false)
+stock void fnGetRandomAlive(int clientIndex[MAXPLAYERS+1], int targetIndex = INVALID_ENT_REFERENCE, bool bZombie = false)
 {
-    // Initialize variables
-    int iAmount; static int clientIndex[MAXPLAYERS+1];
+    // Initialize index
+    int iAmount;
 
     // i = client index
     for(int i = 1; i <= MaxClients; i++)
@@ -478,7 +368,7 @@ stock int[] fnGetRandomAlive(int targetIndex = -1, bool bZombie = false)
     }
     
     // Validate target
-    if(targetIndex != -1)
+    if(targetIndex != INVALID_ENT_REFERENCE)
     {
         // i = client index
         int x = bZombie ? 0 : iAmount - 1; int y = clientIndex[x];
@@ -494,9 +384,6 @@ stock int[] fnGetRandomAlive(int targetIndex = -1, bool bZombie = false)
             }    
         }
     }
-
-    // Return shuffled array
-    return clientIndex;
 }
 
 /**
@@ -519,15 +406,15 @@ stock void fnInitGameConfOffset(Handle gameConf, int &iOffset, char[] sKey)
  * @brief Returns an address value from a given config.
  *
  * @param gameConf          The game config handle.
- * @param xAddress          An adress, or null on failure.
+ * @param pAddress          An address, or null on failure.
  * @param sKey              Key to retrieve from the address section.
  **/
-stock void fnInitGameConfAddress(Handle gameConf, Address &xAddress, char[] sKey)
+stock void fnInitGameConfAddress(Handle gameConf, Address &pAddress, char[] sKey)
 {
     // Validate address
-    if((xAddress = GameConfGetAddress(gameConf, sKey)) == Address_Null)
+    if((pAddress = GameConfGetAddress(gameConf, sKey)) == Address_Null)
     {
-        LogEvent(false, LogType_Fatal, LOG_CORE_EVENTS, LogModule_Engine, "GameData Validation", "Failed to get adress: \"%s\"", sKey);
+        LogEvent(false, LogType_Fatal, LOG_CORE_EVENTS, LogModule_Engine, "GameData Validation", "Failed to get address: \"%s\"", sKey);
     }
 }
 

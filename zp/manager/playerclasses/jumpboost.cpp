@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -67,7 +67,6 @@ void JumpBoostOnCvarInit(/*void*/)
     gCvarList[CVAR_JUMPBOOST]            = FindConVar("zp_jumpboost");
     gCvarList[CVAR_JUMPBOOST_MULTIPLIER] = FindConVar("zp_jumpboost_multiplier");
     gCvarList[CVAR_JUMPBOOST_MAX]        = FindConVar("zp_jumpboost_max"); 
-    gCvarList[CVAR_JUMPBOOST_KNOCKBACK]  = FindConVar("zp_jumpboost_knockback");
 
     // Hook cvars
     HookConVarChange(gCvarList[CVAR_JUMPBOOST], JumpBoostOnCvarHook);
@@ -121,12 +120,6 @@ void JumpBoostOnClientInit(int clientIndex)
  **/
 public void JumpBoostOnClientEntChanged(int clientIndex)
 {
-    // Verify that the client is exist
-    if(!IsPlayerExist(clientIndex))
-    {
-        return;
-    }
-
     // If not on the ground, then stop
     if(!(GetEntityFlags(clientIndex) & FL_ONGROUND))
     {
@@ -137,7 +130,7 @@ public void JumpBoostOnClientEntChanged(int clientIndex)
     if(GetEntityMoveType(clientIndex) != MOVETYPE_LADDER)
     {
         // Reset gravity
-        ToolsSetClientGravity(clientIndex, ClassGetGravity(gClientData[clientIndex].Class) + (gCvarList[CVAR_LEVEL_SYSTEM].BoolValue ? (gCvarList[CVAR_LEVEL_GRAVITY_RATIO].FloatValue * float(gClientData[clientIndex].Level)) : 0.0));
+        ToolsSetGravity(clientIndex, ClassGetGravity(gClientData[clientIndex].Class) + (gCvarList[CVAR_LEVEL_SYSTEM].BoolValue ? (gCvarList[CVAR_LEVEL_GRAVITY_RATIO].FloatValue * float(gClientData[clientIndex].Level)) : 0.0));
     }
 }
 
@@ -155,7 +148,7 @@ public Action JumpBoostOnClientJump(Event hEvent, char[] sName, bool dontBroadca
     int clientIndex = GetClientOfUserId(hEvent.GetInt("userid"));
 
     // Creates a single use next frame hook
-    RequestFrame(view_as<RequestFrameCallback>(JumpBoostOnClientJumpPost), GetClientUserId(clientIndex));
+    _call.JumpBoostOnClientJumpPost(clientIndex);
 }
 
 /**
@@ -175,7 +168,7 @@ public void JumpBoostOnClientJumpPost(int userID)
         static float vVelocity[3];
         
         // Gets client velocity
-        ToolsGetClientVelocity(clientIndex, vVelocity);
+        ToolsGetVelocity(clientIndex, vVelocity);
         
         // Only apply horizontal multiplier if it not a bhop
         if(SquareRoot(Pow(vVelocity[0], 2.0) + Pow(vVelocity[1], 2.0)) < gCvarList[CVAR_JUMPBOOST_MAX].FloatValue)
@@ -189,7 +182,7 @@ public void JumpBoostOnClientJumpPost(int userID)
         vVelocity[2] *= gCvarList[CVAR_JUMPBOOST_MULTIPLIER].FloatValue;
 
         // Sets new velocity
-        ToolsClientVelocity(clientIndex, vVelocity, true, false);
+        ToolsSetVelocity(clientIndex, vVelocity, true, false);
     }
 }
 
@@ -252,10 +245,10 @@ void JumpBoostOnClientLeapJump(int clientIndex)
     /*_________________________________________________________________________________________________________________________________________*/
     
     // Initialize some floats
-    static float vAngle[3]; static float vOrigin[3]; static float vVelocity[3];
+    static float vAngle[3]; static float vPosition[3]; static float vVelocity[3];
     
     // Gets client location and view direction
-    GetClientAbsOrigin(clientIndex, vOrigin);
+    ToolsGetAbsOrigin(clientIndex, vPosition);
     GetClientEyeAngles(clientIndex, vAngle);
     
     // Store zero angle
@@ -272,7 +265,7 @@ void JumpBoostOnClientLeapJump(int clientIndex)
     vAngle[0] = flAngleZero;
     
     // Push the player
-    TeleportEntity(clientIndex, vOrigin, vAngle, vVelocity);
+    TeleportEntity(clientIndex, vPosition, vAngle, vVelocity);
     
     // Forward event to modules
     SoundsOnClientJump(clientIndex);

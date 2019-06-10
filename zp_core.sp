@@ -26,19 +26,21 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  */
  
-// Comment to remove a DHook module features (experimental branch)
+// Comment to remove a DHook module features
 #define USE_DHOOKS
+///#define USE_DETOUR
 
 // Sourcemod
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
 #include <cstrike>
+#include <utils>
 
 #if defined USE_DHOOKS
     #tryinclude <dhooks>   
@@ -86,11 +88,11 @@
  **/
 public Plugin myinfo =
 {
-    name            = PLUGIN_NAME,
-    author          = PLUGIN_AUTHOR,
-    description     = PLUGIN_COPYRIGHT,
-    version         = PLUGIN_VERSION,
-    url             = PLUGIN_LINK
+    name        = PLUGIN_NAME,
+    author      = PLUGIN_AUTHOR,
+    description = PLUGIN_COPYRIGHT,
+    version     = PLUGIN_VERSION,
+    url         = PLUGIN_LINK
 }
 
 //*********************************************************************

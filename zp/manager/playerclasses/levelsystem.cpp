@@ -20,61 +20,44 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
 
 /**
- * Array to store the level data.
+ * @section Level config data indexes.
  **/
-int  LevelSystemNum;
-char LevelSystemStats[BIG_LINE_LENGTH][SMALL_LINE_LENGTH];
+enum
+{
+    LEVELS_DATA_INDEX
+};
+/**
+ * @endsection 
+ **/
 
 /**
  * @brief Level system module init function.
  **/
 void LevelSystemOnInit(/*void*/)
 {
-    // Resets level data
-    LevelSystemNum = 0; 
- 
-    // If level system disabled, then skip
-    if(gCvarList[CVAR_LEVEL_SYSTEM].BoolValue)
-    {
-        // Gets level list
-        static char sList[PLATFORM_LINE_LENGTH];
-        gCvarList[CVAR_LEVEL_STATISTICS].GetString(sList, sizeof(sList));
+    // Prepare all levels data
+    LevelSystemOnLoad();
 
-        // Validate list
-        if(hasLength(sList))
-        {
-            // Gets level list
-            LevelSystemNum = ExplodeString(sList, ",", LevelSystemStats, sizeof(LevelSystemStats), sizeof(LevelSystemStats[])) - 1;
-            
-            // i = level index
-            for(int i = 0; i < LevelSystemNum; i++)
-            {
-                // Trim string
-                TrimString(LevelSystemStats[i]);
-            }
-        }
-    }
-    
-    // If level hud disable, then stop
-    if(!gCvarList[CVAR_LEVEL_HUD].BoolValue)
+    // If level system disable, then stop
+    if(!gCvarList[CVAR_LEVEL_SYSTEM].BoolValue || !gCvarList[CVAR_LEVEL_HUD].BoolValue )
     {
         // Validate loaded map
         if(gServerData.MapLoaded)
         {
             // Validate sync
-            if(gServerData.Level != null)
+            if(gServerData.LevelSync != null)
             {
                 // i = client index
                 for(int i = 1; i <= MaxClients; i++)
                 {
                     // Validate client
-                    if(IsPlayerExist(i))
+                    if(IsPlayerExist(i, false))
                     {
                         // Remove timer
                         delete gClientData[i].LevelTimer;
@@ -82,18 +65,18 @@ void LevelSystemOnInit(/*void*/)
                 }
                 
                 // Remove sync
-                delete gServerData.Level;
+                delete gServerData.LevelSync;
             }
         }
         return;
     }
     
     // Creates a HUD synchronization object
-    if(gServerData.Level == null)
+    if(gServerData.LevelSync == null)
     {
-        gServerData.Level = CreateHudSynchronizer();
+        gServerData.LevelSync = CreateHudSynchronizer();
     }
-
+    
     // Validate loaded map
     if(gServerData.MapLoaded)
     {
@@ -101,13 +84,136 @@ void LevelSystemOnInit(/*void*/)
         for(int i = 1; i <= MaxClients; i++)
         {
             // Validate client
-            if(IsPlayerExist(i))
+            if(IsPlayerExist(i, false))
             {
                 // Enable level system
                 LevelSystemOnClientUpdate(i);
             }
         }
     }
+}
+
+/**
+ * @brief Prepare all level data.
+ **/
+void LevelSystemOnLoad(/*void*/)
+{
+    // Register config file
+    ConfigRegisterConfig(File_Levels, Structure_List, CONFIG_FILE_ALIAS_LEVELS);
+    
+    // If level system disabled, then stop
+    if(!gCvarList[CVAR_LEVEL_SYSTEM].BoolValue)
+    {
+        return;
+    }
+    
+    // Gets levels config path
+    static char sPathLevels[PLATFORM_LINE_LENGTH];
+    bool bExists = ConfigGetFullPath(CONFIG_PATH_LEVELS, sPathLevels);
+
+    // If file doesn't exist, then log and stop
+    if(!bExists)
+    {
+        // Log failure
+        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Levels, "Config Validation", "Missing levels config file: %s", sPathLevels);
+        return;
+    }
+    
+    // Sets path to the config file
+    ConfigSetConfigPath(File_Levels, sPathLevels);
+    
+    // Load config from file and create array structure
+    bool bSuccess = ConfigLoadConfig(File_Levels, gServerData.Levels);
+
+    // Unexpected error, stop plugin
+    if(!bSuccess)
+    {
+        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Levels, "Config Validation", "Unexpected error encountered loading: %s", sPathLevels);
+        return;
+    }
+
+    // Now copy data to array structure
+    LevelSystemOnCacheData();
+
+    // Sets config data
+    ConfigSetConfigLoaded(File_Levels, true);
+    ConfigSetConfigReloadFunc(File_Levels, GetFunctionByName(GetMyHandle(), "LevelSystemOnConfigReload"));
+    ConfigSetConfigHandle(File_Levels, gServerData.Levels);
+}
+
+/**
+ * @brief Caches level data from file into arrays.
+ **/
+void LevelSystemOnCacheData(/*void*/)
+{
+    // Gets config file path
+    static char sPathLevels[PLATFORM_LINE_LENGTH];
+    ConfigGetConfigPath(File_Levels, sPathLevels, sizeof(sPathLevels));
+    
+    // Validate levels config
+    int iLevels = gServerData.Levels.Length;
+    if(!iLevels)
+    {
+        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Levels, "Config Validation", "No usable data found in levels config file: %s", sPathLevels);
+        return;
+    }
+    
+    // Initialize a level list array
+    ArrayList hLevel = CreateArray();
+
+    // i = level array index
+    for(int i = 0; i < iLevels; i++)
+    {
+        // Gets level index
+        gServerData.Levels.GetString(i, sPathLevels, sizeof(sPathLevels));
+
+        // Validate unique integer
+        int iLimit = StringToInt(sPathLevels);
+        if(iLimit <= 0 || hLevel.FindValue(iLimit) != -1)
+        {
+            // Log level error info
+            LogEvent(false, LogType_Error, LOG_GAME_EVENTS, LogModule_Levels, "Config Validation", "Incorrect level \"%s\"", sPathLevels);
+            
+            // Remove level from array
+            gServerData.Levels.Erase(i);
+
+            // Subtract one from count
+            iLevels--;
+
+            // Backtrack one index, because we deleted it out from under the loop
+            i--;
+            continue;
+        }
+        
+        // Push data into array
+        hLevel.Push(iLimit);
+    }
+    
+    // Validate levels config (after converation)
+    if(!iLevels)
+    {
+        LogEvent(false, LogType_Fatal, LOG_GAME_EVENTS, LogModule_Levels, "Config Validation", "No usable data found in levels config file: %s", sPathLevels);
+        return;
+    }
+    
+    /// Do quick sort!
+    SortADTArray(hLevel, Sort_Ascending, Sort_Integer);
+    
+    // Replace with new array
+    delete gServerData.Levels;
+    gServerData.Levels = hLevel.Clone();
+    delete hLevel;
+}
+
+/**
+ * @brief Called when configs are being reloaded.
+ * 
+ * @param iConfig           The config being reloaded. (only if 'all' is false)
+ **/
+public void LevelSystemOnConfigReload(ConfigFile iConfig)
+{
+    // Reloads level config
+    LevelSystemOnLoad();
 }
 
 /**
@@ -127,7 +233,6 @@ void LevelSystemOnCvarInit(/*void*/)
 {
     // Creates cvars
     gCvarList[CVAR_LEVEL_SYSTEM]          = FindConVar("zp_level_system");
-    gCvarList[CVAR_LEVEL_STATISTICS]      = FindConVar("zp_level_statistics"); 
     gCvarList[CVAR_LEVEL_HEALTH_RATIO]    = FindConVar("zp_level_health_ratio");
     gCvarList[CVAR_LEVEL_SPEED_RATIO]     = FindConVar("zp_level_speed_ratio");
     gCvarList[CVAR_LEVEL_GRAVITY_RATIO]   = FindConVar("zp_level_gravity_ratio");
@@ -155,6 +260,26 @@ void LevelSystemOnCvarInit(/*void*/)
     HookConVarChange(gCvarList[CVAR_LEVEL_SPEED_RATIO],   LevelSystemChangeOnCvarHook);           
     HookConVarChange(gCvarList[CVAR_LEVEL_GRAVITY_RATIO], LevelSystemChangeOnCvarHook); 
 }
+
+/*
+ * Level data reading API.
+ */
+
+/**
+ * @brief Gets the limit at a given level.
+ * 
+ * @param iLevel            The level amount.
+ * @return                  The limit amount.
+ **/ 
+int LevelSystemGetLimit(int iLevel)
+{
+    // Return the value 
+    return gServerData.Levels.Get(iLevel-1);
+}
+
+/*
+ * Level main functions.
+ */
 
 /**
  * @brief Client has been spawned.
@@ -185,8 +310,8 @@ void LevelSystemOnClientDeath(int clientIndex)
  **/
 void LevelSystemOnClientUpdate(int clientIndex)
 {
-    // If level hud disabled, then stop
-    if(!gCvarList[CVAR_LEVEL_HUD].BoolValue)
+    // If level system disabled, then stop
+    if(!gCvarList[CVAR_LEVEL_SYSTEM].BoolValue || !gCvarList[CVAR_LEVEL_HUD].BoolValue)
     {
         return;
     }
@@ -214,12 +339,6 @@ void LevelSystemOnSetLvl(int clientIndex, int iLevel)
         return;
     }
 
-    // Validate level amount
-    if(!LevelSystemNum)
-    {
-        return;
-    }
-    
     // Call forward
     gForwardData._OnClientLevel(clientIndex, iLevel);
 
@@ -231,15 +350,15 @@ void LevelSystemOnSetLvl(int clientIndex, int iLevel)
 
     // Sets level
     gClientData[clientIndex].Level = iLevel;
-    
-    // Update level in the database
-    DataBaseOnClientUpdate(clientIndex, ColumnType_Level);
 
+    // Gets the max level
+    int iMaxLevel = gServerData.Levels.Length;
+    
     // Validate level
-    if(gClientData[clientIndex].Level > LevelSystemNum)
+    if(gClientData[clientIndex].Level > iMaxLevel)
     {
-        // Update it
-        gClientData[clientIndex].Level = LevelSystemNum;
+        // Reset it
+        gClientData[clientIndex].Level = iMaxLevel;
     }
     else
     {
@@ -250,6 +369,9 @@ void LevelSystemOnSetLvl(int clientIndex, int iLevel)
             SoundsOnClientLevelUp(clientIndex);
         }
     }
+    
+    // Update level in the database
+    DataBaseOnClientUpdate(clientIndex, ColumnType_Level);
 }
 
 /**
@@ -266,12 +388,6 @@ void LevelSystemOnSetExp(int clientIndex, int iExp)
         return;
     }
 
-    // Validate level amount
-    if(!LevelSystemNum)
-    {
-        return;
-    }
-
     // Call forward
     gForwardData._OnClientExp(clientIndex, iExp);
     
@@ -283,24 +399,28 @@ void LevelSystemOnSetExp(int clientIndex, int iExp)
 
     // Sets experience
     gClientData[clientIndex].Exp = iExp;
-    
-    // Update experience in the database
-    DataBaseOnClientUpdate(clientIndex, ColumnType_Exp);
 
+    // Gets the max level
+    int iMaxLevel = gServerData.Levels.Length;
+    
     // Give experience to the player
-    if(gClientData[clientIndex].Level == LevelSystemNum && gClientData[clientIndex].Exp > StringToInt(LevelSystemStats[gClientData[clientIndex].Level]))
+    if(gClientData[clientIndex].Level == iMaxLevel && gClientData[clientIndex].Exp > LevelSystemGetLimit(gClientData[clientIndex].Level))
     {
-        gClientData[clientIndex].Exp = StringToInt(LevelSystemStats[gClientData[clientIndex].Level]);
+        // Reset it
+        gClientData[clientIndex].Exp = LevelSystemGetLimit(gClientData[clientIndex].Level);
     }
     else
     {
-        // Count throught experience
-        while(gClientData[clientIndex].Level < LevelSystemNum && gClientData[clientIndex].Exp >= StringToInt(LevelSystemStats[gClientData[clientIndex].Level]))
+        // Count through experience
+        while(gClientData[clientIndex].Level < iMaxLevel && gClientData[clientIndex].Exp >= LevelSystemGetLimit(gClientData[clientIndex].Level))
         {
             // Increase level
             LevelSystemOnSetLvl(clientIndex, gClientData[clientIndex].Level + 1);
         }
     }
+    
+    // Update experience in the database
+    DataBaseOnClientUpdate(clientIndex, ColumnType_Exp);
 }
 
 /**
@@ -327,7 +447,7 @@ public Action LevelSystemOnClientHUD(Handle hTimer, int userID)
         if(!IsPlayerAlive(clientIndex))
         {
             // Validate spectator mode
-            int iSpecMode = ToolsGetClientObserverMode(clientIndex);
+            int iSpecMode = ToolsGetObserverMode(clientIndex);
             if(iSpecMode != SPECMODE_FIRSTPERSON && iSpecMode != SPECMODE_3RDPERSON)
             {
                 // Allow timer
@@ -335,7 +455,7 @@ public Action LevelSystemOnClientHUD(Handle hTimer, int userID)
             }
             
             // Gets the observer target
-            targetIndex = ToolsGetClientObserverTarget(clientIndex);
+            targetIndex = ToolsGetObserverTarget(clientIndex);
             
             // Validate target
             if(!IsPlayerExist(targetIndex)) 
@@ -376,17 +496,8 @@ public Action LevelSystemOnClientHUD(Handle hTimer, int userID)
         static char sInfo[SMALL_LINE_LENGTH];
         ClassGetName(gClientData[targetIndex].Class, sInfo, sizeof(sInfo));
 
-        // If level system disabled, then format differently
-        if(!gCvarList[CVAR_LEVEL_SYSTEM].BoolValue || !LevelSystemNum)
-        {
-            // Print hud text to the client
-            TranslationPrintHudText(gServerData.Level, clientIndex, gCvarList[CVAR_LEVEL_HUD_X].FloatValue, gCvarList[CVAR_LEVEL_HUD_Y].FloatValue, 1.1, iColor[0], iColor[1], iColor[2], iColor[3], 0, 0.0, 0.0, 0.0, "short info", GetClientArmor(targetIndex), sInfo);
-        }
-        else
-        {
-            // Print hud text to the client
-            TranslationPrintHudText(gServerData.Level, clientIndex, gCvarList[CVAR_LEVEL_HUD_X].FloatValue, gCvarList[CVAR_LEVEL_HUD_Y].FloatValue, 1.1, iColor[0], iColor[1], iColor[2], iColor[3], 0, 0.0, 0.0, 0.0, "level info", GetClientArmor(targetIndex), sInfo, gClientData[targetIndex].Level, gClientData[targetIndex].Exp, LevelSystemStats[gClientData[targetIndex].Level]);
-        }
+        // Print hud text to the client
+        TranslationPrintHudText(gServerData.LevelSync, clientIndex, gCvarList[CVAR_LEVEL_HUD_X].FloatValue, gCvarList[CVAR_LEVEL_HUD_Y].FloatValue, 1.1, iColor[0], iColor[1], iColor[2], iColor[3], 0, 0.0, 0.0, 0.0, "level info", sInfo, gClientData[targetIndex].Level, gClientData[targetIndex].Exp, LevelSystemGetLimit(gClientData[targetIndex].Level));
 
         // Allow timer
         return Plugin_Continue;
@@ -401,7 +512,7 @@ public Action LevelSystemOnClientHUD(Handle hTimer, int userID)
 
 /**
  * Cvar hook callback (zp_level_system)
- * @brief Levelsystem module initialization.
+ * @brief Level system module initialization.
  * 
  * @param hConVar           The cvar handle.
  * @param oldValue          The value before the attempted change.
@@ -451,9 +562,9 @@ public void LevelSystemChangeOnCvarHook(ConVar hConVar, char[] oldValue, char[] 
             if(IsPlayerExist(i))
             {
                 // Update variables
-                ToolsSetClientHealth(i, ClassGetHealth(gClientData[i].Class) + (RoundToNearest(gCvarList[CVAR_LEVEL_HEALTH_RATIO].FloatValue * float(gClientData[i].Level))), true);
-                ToolsSetClientLMV(i, ClassGetSpeed(gClientData[i].Class) + (gCvarList[CVAR_LEVEL_SPEED_RATIO].FloatValue * float(gClientData[i].Level)));
-                ToolsSetClientGravity(i, ClassGetGravity(gClientData[i].Class) + (gCvarList[CVAR_LEVEL_GRAVITY_RATIO].FloatValue * float(gClientData[i].Level)));
+                ToolsSetHealth(i, ClassGetHealth(gClientData[i].Class) + (RoundToNearest(gCvarList[CVAR_LEVEL_HEALTH_RATIO].FloatValue * float(gClientData[i].Level))), true);
+                ToolsSetLMV(i, ClassGetSpeed(gClientData[i].Class) + (gCvarList[CVAR_LEVEL_SPEED_RATIO].FloatValue * float(gClientData[i].Level)));
+                ToolsSetGravity(i, ClassGetGravity(gClientData[i].Class) + (gCvarList[CVAR_LEVEL_GRAVITY_RATIO].FloatValue * float(gClientData[i].Level)));
             }
         }
     }
@@ -468,6 +579,12 @@ public void LevelSystemChangeOnCvarHook(ConVar hConVar, char[] oldValue, char[] 
  **/ 
 public Action LevelSystemLevelOnCommandCatched(int clientIndex, int iArguments)
 {
+    // If level system disabled, then stop
+    if(!gCvarList[CVAR_LEVEL_SYSTEM].BoolValue)
+    {
+        return Plugin_Handled;
+    }
+    
     // If not enough arguments given, then stop
     if(iArguments < 2)
     {
@@ -519,6 +636,12 @@ public Action LevelSystemLevelOnCommandCatched(int clientIndex, int iArguments)
  **/ 
 public Action LevelSystemExpOnCommandCatched(int clientIndex, int iArguments)
 {
+    // If level system disabled, then stop
+    if(!gCvarList[CVAR_LEVEL_SYSTEM].BoolValue)
+    {
+        return Plugin_Handled;
+    }
+    
     // If not enough arguments given, then stop
     if(iArguments < 2)
     {
@@ -570,10 +693,44 @@ public Action LevelSystemExpOnCommandCatched(int clientIndex, int iArguments)
  **/
 void LevelSystemOnNativeInit(/*void*/)
 {
+    CreateNative("ZP_GetLevelMax",    API_GetLevelMax);
+    CreateNative("ZP_GetLevelLimit",  API_GetLevelLimit);
     CreateNative("ZP_GetClientLevel", API_GetClientLevel);
     CreateNative("ZP_SetClientLevel", API_SetClientLevel);
     CreateNative("ZP_GetClientExp",   API_GetClientExp);
     CreateNative("ZP_SetClientExp",   API_SetClientExp);
+}
+
+/**
+ * @brief Gets the maximum level.
+ *
+ * @note native int ZP_GetLevelMax();
+ **/
+public int API_GetLevelMax(Handle hPlugin, int iNumParams)
+{
+    // Return the value 
+    return gServerData.Levels.Length;
+}
+
+/**
+ * @brief Gets the level experience limit.
+ *
+ * @note native int ZP_GetLevelLimit(iD);
+ **/
+public int API_GetLevelLimit(Handle hPlugin, int iNumParams)
+{
+    // Gets level index from native cell 
+    int iD = GetNativeCell(1);
+    
+    // Validate index
+    if(iD < 1 || iD > gServerData.Levels.Length)
+    {
+        LogEvent(false, LogType_Native, LOG_GAME_EVENTS, LogModule_Levels, "Native Validation", "Invalid the level index (%d)", iD);
+        return -1;
+    }
+
+    // Return the value 
+    return LevelSystemGetLimit(iD);
 }
 
 /**

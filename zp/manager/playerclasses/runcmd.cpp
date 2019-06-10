@@ -20,7 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * ============================================================================
  **/
@@ -43,7 +43,7 @@
 public Action OnPlayerRunCmd(int clientIndex, int &iButtons, int &iImpulse, float flVelocity[3], float flAngles[3], int &weaponID, int &iSubType, int &iCmdNum, int &iTickCount, int &iSeed, int iMouse[2])
 {
     // Initialize variables
-    static Action resultHandle; static int iLastButtons[MAXPLAYERS+1]; 
+    Action resultHandle; static int iLastButtons[MAXPLAYERS+1]; 
 
     // Validate client
     if(IsPlayerExist(clientIndex, false))
